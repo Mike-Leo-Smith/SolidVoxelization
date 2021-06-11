@@ -21,3 +21,6 @@ set(EMBREE_STATIC_LIB OFF CACHE BOOL "" FORCE)
 set(EMBREE_TASKING_SYSTEM "INTERNAL" CACHE STRING "" FORCE)
 add_subdirectory(embree)
 target_link_libraries(sv-ext INTERFACE embree)
+
+find_package(OpenCV REQUIRED)
+target_link_libraries(sv-ext INTERFACE ${OpenCV_LIBS})
