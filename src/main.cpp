@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <numeric>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -28,6 +29,8 @@ struct BoundingBox {
 
     [[nodiscard]] auto centroid() const noexcept { return 0.5f * (min + max); }
     [[nodiscard]] auto extent() const noexcept { return max - min; }
+    [[nodiscard]] auto diagonal() const noexcept { return glm::length(extent()); }
+    [[nodiscard]] auto radius() const noexcept { return 0.5f * diagonal(); }
 };
 
 struct alignas(16) Ray {
@@ -47,6 +50,13 @@ struct alignas(16) Hit {
     unsigned int prim_id;
     unsigned int geom_id;
     unsigned int inst_id;
+};
+
+struct Segment {
+    int x;
+    int y;
+    int z_min;
+    int z_max;
 };
 
 /* Combined ray/hit structure for a single ray */
@@ -69,7 +79,7 @@ int main() {
                                     | aiComponent_TANGENTS_AND_BITANGENTS
                                     | aiComponent_TEXCOORDS
                                     | aiComponent_TEXTURES);
-    auto model = importer.ReadFile("data/bunny.ply",
+    auto model = importer.ReadFile("data/bunny.obj",
                                    aiProcess_Triangulate
                                        | aiProcess_JoinIdenticalVertices
                                        | aiProcess_RemoveComponent
@@ -105,60 +115,84 @@ int main() {
         ib[i] = {indices[0], indices[1], indices[2]};
     }
 
+    static constexpr auto diameter = 1024;
+
+    BoundingBox bbox{vb[0], vb[0]};
+    for (auto i = 1u; i < mesh->mNumVertices; i++) { bbox.update(vb[i]); }
+    auto centroid = bbox.centroid();
+    auto radius = std::accumulate(vb, vb + mesh->mNumVertices, 0.0f, [centroid](auto r, auto p) noexcept {
+        return std::max(r, glm::distance(p, centroid));
+    });
+    auto scale = static_cast<float>(diameter) * 0.5f / radius;
+    for (auto i = 0u; i < mesh->mNumVertices; i++) {
+        vb[i] = (vb[i] - centroid) * scale;
+    }
+
     rtcCommitGeometry(geom);
     rtcAttachGeometry(scene, geom);
     rtcReleaseGeometry(geom);
     rtcCommitScene(scene);
 
-    BoundingBox bbox{vb[0], vb[0]};
-    for (auto i = 1u; i < mesh->mNumVertices; i++) { bbox.update(vb[i]); }
-
     std::cout << "Vertices: " << mesh->mNumVertices << "\n"
               << "Faces:    " << mesh->mNumFaces << "\n"
               << "BBox:     " << glm::to_string(bbox.min) << " -> " << glm::to_string(bbox.max) << std::endl;
-
-    auto max_extent = glm::compMax(bbox.extent());
-    auto centroid = bbox.centroid();
-
-    std::vector<RayHit> rays;
-    rays.resize(1024 * 1024);
-    for (auto y = 0u; y < 1024u; y++) {
-        for (auto x = 0u; x < 1024u; x++) {
-            auto index = y * 1024u + x;
-            auto &&r = rays[index];
-            auto dx = (static_cast<float>(x) / 1024.0f - 0.5f) * max_extent;
-            auto dy = (0.5f - static_cast<float>(y) / 1024.0f) * max_extent;
-            auto dz = max_extent;
-            r.ray.o = centroid + glm::vec3{dx, dy, dz};
-            r.ray.t_min = 0.0f;
-            r.ray.t_max = std::numeric_limits<float>::max();
-            r.ray.d = {0.0f, 0.0f, -1.0f};
-            r.hit.geom_id = RTC_INVALID_GEOMETRY_ID;
-        }
-    }
 
     RTCIntersectContext context{};
     rtcInitIntersectContext(&context);
     context.flags = RTC_INTERSECT_CONTEXT_FLAG_COHERENT;
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    rtcIntersect1M(scene, &context, reinterpret_cast<RTCRayHit *>(rays.data()), 1024u * 1024u, sizeof(RayHit));
-    auto t1 = std::chrono::high_resolution_clock::now();
+    cv::Mat image{diameter, diameter, CV_32FC3, cv::Scalar::all(0)};
+    std::vector<RayHit> rays;
+    rays.resize(diameter * diameter);
+    glm::mat4 R{1.0f};
+    for (;;) {
+        auto omega = glm::mat3{R} * glm::vec3{0.0f, 0.0f, -1.0f};
+        for (auto y = 0; y < diameter; y++) {
+            for (auto x = 0; x < diameter; x++) {
+                auto index = y * diameter + x;
+                auto &&r = rays[index];
+                auto dx = static_cast<float>(x - diameter / 2) + 0.5f;
+                auto dy = static_cast<float>(diameter / 2 - y) - 0.5f;
+                auto dz = static_cast<float>(diameter);
+                auto d = glm::vec3{R * glm::vec4{dx, dy, dz, 1.0f}};
+                r.ray.o = centroid + d;
+                r.ray.t_min = 0.0f;
+                r.ray.t_max = std::numeric_limits<float>::max();
+                r.ray.d = omega;
+                r.hit.geom_id = RTC_INVALID_GEOMETRY_ID;
+            }
+        }
 
-    using namespace std::chrono_literals;
-    std::cout << "Rendering TIme: " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
+        auto t0 = std::chrono::high_resolution_clock::now();
+        rtcIntersect1M(scene, &context, reinterpret_cast<RTCRayHit *>(rays.data()), diameter * diameter, sizeof(RayHit));
+        auto t1 = std::chrono::high_resolution_clock::now();
 
-    cv::Mat image{1024, 1024, CV_32FC3, cv::Scalar::all(0)};
-    for (auto i = 0u; i < 1024U * 1024u; i++) {
-        auto &&pixel = reinterpret_cast<glm::vec3 *>(image.data)[i];
-        auto hit = rays[i].hit;
-        if (hit.geom_id != RTC_INVALID_GEOMETRY_ID) {
-            auto ng = glm::normalize(hit.ng);
-            pixel = ng * 0.5f + 0.5f;
+        using namespace std::chrono_literals;
+        std::cout << "Rendering TIme: " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
+        for (auto i = 0u; i < 1024U * 1024u; i++) {
+            auto &&pixel = reinterpret_cast<glm::vec3 *>(image.data)[i];
+            auto hit = rays[i].hit;
+            if (hit.geom_id != RTC_INVALID_GEOMETRY_ID) {
+                auto ng = glm::normalize(hit.ng);
+                ng = glm::vec3{ng.z, ng.y, ng.x};
+                pixel = ng * 0.5f + 0.5f;
+            } else {
+                pixel = {};
+            }
+        }
+        cv::imshow("Display", image);
+        auto key = cv::waitKey(1);
+        if (key == 'q') { break; }
+        if (key == 'a') {
+            R = glm::rotate(R, glm::radians(5.0f), glm::vec3{0.0f, 1.0f, 0.0f});
+        } else if (key == 'd') {
+            R = glm::rotate(R, glm::radians(-5.0f), glm::vec3{0.0f, 1.0f, 0.0f});
+        } else if (key == 'w') {
+            R = glm::rotate(R, glm::radians(5.0f), glm::vec3{1.0f, 0.0f, 0.0f});
+        } else if (key == 's') {
+            R = glm::rotate(R, glm::radians(-5.0f), glm::vec3{1.0f, 0.0f, 0.0f});
         }
     }
-    
-    cv::cvtColor(image, image, cv::COLOR_RGB2BGR);
     cv::imwrite("normal.exr", image);
 
     rtcReleaseScene(scene);
