@@ -61,7 +61,7 @@ int main() {
         } else if (key == 's') {
             R = glm::rotate(R, glm::radians(-5.0f), glm::vec3{1.0f, 0.0f, 0.0f});
         } else if (key == ' ') {
-            auto volume = Volume::from(*mesh, 256u, R);
+            auto volume = Volume::from(*mesh, 64u, R);
         }
     }
     cv::imwrite("normal.exr", image);

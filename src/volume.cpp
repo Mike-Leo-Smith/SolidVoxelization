@@ -4,8 +4,10 @@
 
 #include <array>
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <vector>
+#include <iomanip>
 
 #include <volume.h>
 
@@ -67,12 +69,13 @@ class Octree {
                             } else if (c > 0.0f) {
                                 if (--counter == 0) {// found segment
                                     auto z_range = (1.5f - glm::vec2{ray_hit.ray.t_max, t_start} * 0.5f) * res_f;
-                                    auto z_index_range = glm::uvec2{glm::clamp(z_range + glm::vec2{0.5f, -0.5f}, 0.0f, res_f - 1.0f)};
-                                    Segment segment{static_cast<uint16_t>(x),
-                                                    static_cast<uint16_t>(y),
-                                                    static_cast<uint16_t>(z_index_range.x),
-                                                    static_cast<uint16_t>(z_index_range.y)};
-                                    segment_cache.emplace_back(segment);
+                                    if (auto z = glm::uvec2{glm::clamp(z_range + glm::vec2{0.5f, -0.5f}, 0.0f, res_f - 1.0f)}; z.x <= z.y) {
+                                        Segment segment{static_cast<uint16_t>(x),
+                                                        static_cast<uint16_t>(y),
+                                                        static_cast<uint16_t>(z.x),
+                                                        static_cast<uint16_t>(z.y)};
+                                        segment_cache.emplace_back(segment);
+                                    }
                                 } else if (counter < 0) {// bad case, reset
                                     counter = 0;
                                 }
@@ -80,7 +83,7 @@ class Octree {
                         }
                     }
                 }
-    
+
                 // flush...
                 if (!segment_cache.empty()) {
                     std::scoped_lock lock{mutex};
@@ -103,11 +106,71 @@ std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::m
     auto t0 = std::chrono::high_resolution_clock::now();
     auto segments = compute_segments(mesh, camera_to_world, resolution);
     auto t1 = std::chrono::high_resolution_clock::now();
-    
+
     using namespace std::chrono_literals;
     std::cout << "Computed " << segments.size() << " segments in " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
 
     // TODO: construct octree...
+    const std::array cube_vertices{
+        glm::vec3{-0.5f, -0.5f, -0.5f},
+        glm::vec3{0.5f, -0.5f, -0.5f},
+        glm::vec3{0.5f, 0.5f, -0.5f},
+        glm::vec3{0.5f, 0.5f, -0.5f},
+        glm::vec3{-0.5f, 0.5f, -0.5f},
+        glm::vec3{-0.5f, -0.5f, -0.5f},
+        glm::vec3{-0.5f, -0.5f, 0.5f},
+        glm::vec3{0.5f, -0.5f, 0.5f},
+        glm::vec3{0.5f, 0.5f, 0.5f},
+        glm::vec3{0.5f, 0.5f, 0.5f},
+        glm::vec3{-0.5f, 0.5f, 0.5f},
+        glm::vec3{-0.5f, -0.5f, 0.5f},
+        glm::vec3{-0.5f, 0.5f, 0.5f},
+        glm::vec3{-0.5f, 0.5f, -0.5f},
+        glm::vec3{-0.5f, -0.5f, -0.5f},
+        glm::vec3{-0.5f, -0.5f, -0.5f},
+        glm::vec3{-0.5f, -0.5f, 0.5f},
+        glm::vec3{-0.5f, 0.5f, 0.5f},
+        glm::vec3{0.5f, 0.5f, 0.5f},
+        glm::vec3{0.5f, 0.5f, -0.5f},
+        glm::vec3{0.5f, -0.5f, -0.5f},
+        glm::vec3{0.5f, -0.5f, -0.5f},
+        glm::vec3{0.5f, -0.5f, 0.5f},
+        glm::vec3{0.5f, 0.5f, 0.5f},
+        glm::vec3{-0.5f, -0.5f, -0.5f},
+        glm::vec3{0.5f, -0.5f, -0.5f},
+        glm::vec3{0.5f, -0.5f, 0.5f},
+        glm::vec3{0.5f, -0.5f, 0.5f},
+        glm::vec3{-0.5f, -0.5f, 0.5f},
+        glm::vec3{-0.5f, -0.5f, -0.5f},
+        glm::vec3{-0.5f, 0.5f, -0.5f},
+        glm::vec3{0.5f, 0.5f, -0.5f},
+        glm::vec3{0.5f, 0.5f, 0.5f},
+        glm::vec3{0.5f, 0.5f, 0.5f},
+        glm::vec3{-0.5f, 0.5f, 0.5f},
+        glm::vec3{-0.5f, 0.5f, -0.5f},
+    };
+
+    // save segments as .obj
+    std::vector<glm::vec3> vertices;
+    std::vector<glm::uvec3> indices;
+    std::for_each(segments.cbegin(), segments.cend(), [&](Segment s) noexcept {
+        auto T = glm::translate(glm::vec3{s.x + 0.5f, s.y + 0.5f, (s.z_min + s.z_max) * 0.5f + 0.5f});
+        auto S = glm::scale(glm::vec3{1.0f, 1.0f, s.z_max - s.z_min + 1.0f});
+        auto M = T * S;
+        for (auto i = 0u; i < cube_vertices.size(); i += 3u) {
+            auto i0 = static_cast<uint32_t>(vertices.size());
+            for (auto j = 0u; j < 3u; j++) {
+                auto v = glm::vec3{M * glm::vec4{cube_vertices[i + j], 1.0f}};
+                vertices.emplace_back(v * (2.0f / static_cast<float>(resolution)) - 1.0f + glm::vec3{0.0f, 1.0f, 0.0f});
+            }
+            indices.emplace_back(glm::uvec3{i0, i0 + 1, i0 + 2});
+        }
+    });
+    
+    std::ofstream file{"test.obj"};
+    file << std::setprecision(10);
+    for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
+    for (auto i : indices) { file << "f " << i.x + 1u << " " << i.y + 1u << " " << i.z + 1u << "\n"; }
 
     return std::unique_ptr<Volume>{new Volume{nullptr /* TODO */, resolution}};
 }
