@@ -3,11 +3,11 @@
 //
 
 #include <array>
-#include <iostream>
 #include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <thread>
 #include <vector>
-#include <iomanip>
 
 #include <volume.h>
 
@@ -110,63 +110,54 @@ std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::m
     using namespace std::chrono_literals;
     std::cout << "Computed " << segments.size() << " segments in " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
 
+    // save test data
+    {
+        std::ofstream file{"test-" + std::to_string(resolution) + ".txt"};
+        file << resolution << "\n"
+             << segments.size() << "\n";
+        for (auto s : segments) {
+            file << s.x << " " << s.y << " " << s.z_min << " " << s.z_max << "\n";
+        }
+    }
+
     // TODO: construct octree...
     const std::array cube_vertices{
-        glm::vec3{-0.5f, -0.5f, -0.5f},
-        glm::vec3{0.5f, -0.5f, -0.5f},
-        glm::vec3{0.5f, 0.5f, -0.5f},
-        glm::vec3{0.5f, 0.5f, -0.5f},
-        glm::vec3{-0.5f, 0.5f, -0.5f},
-        glm::vec3{-0.5f, -0.5f, -0.5f},
-        glm::vec3{-0.5f, -0.5f, 0.5f},
-        glm::vec3{0.5f, -0.5f, 0.5f},
-        glm::vec3{0.5f, 0.5f, 0.5f},
-        glm::vec3{0.5f, 0.5f, 0.5f},
-        glm::vec3{-0.5f, 0.5f, 0.5f},
-        glm::vec3{-0.5f, -0.5f, 0.5f},
-        glm::vec3{-0.5f, 0.5f, 0.5f},
-        glm::vec3{-0.5f, 0.5f, -0.5f},
-        glm::vec3{-0.5f, -0.5f, -0.5f},
-        glm::vec3{-0.5f, -0.5f, -0.5f},
-        glm::vec3{-0.5f, -0.5f, 0.5f},
-        glm::vec3{-0.5f, 0.5f, 0.5f},
-        glm::vec3{0.5f, 0.5f, 0.5f},
-        glm::vec3{0.5f, 0.5f, -0.5f},
-        glm::vec3{0.5f, -0.5f, -0.5f},
-        glm::vec3{0.5f, -0.5f, -0.5f},
-        glm::vec3{0.5f, -0.5f, 0.5f},
-        glm::vec3{0.5f, 0.5f, 0.5f},
-        glm::vec3{-0.5f, -0.5f, -0.5f},
-        glm::vec3{0.5f, -0.5f, -0.5f},
-        glm::vec3{0.5f, -0.5f, 0.5f},
-        glm::vec3{0.5f, -0.5f, 0.5f},
-        glm::vec3{-0.5f, -0.5f, 0.5f},
-        glm::vec3{-0.5f, -0.5f, -0.5f},
-        glm::vec3{-0.5f, 0.5f, -0.5f},
-        glm::vec3{0.5f, 0.5f, -0.5f},
-        glm::vec3{0.5f, 0.5f, 0.5f},
-        glm::vec3{0.5f, 0.5f, 0.5f},
-        glm::vec3{-0.5f, 0.5f, 0.5f},
-        glm::vec3{-0.5f, 0.5f, -0.5f},
-    };
+        glm::vec3{0.0f, 0.0f, 0.0f},
+        glm::vec3{1.0f, 0.0f, 0.0f},
+        glm::vec3{1.0f, 1.0f, 0.0f},
+        glm::vec3{0.0f, 1.0f, 0.0f},
+        glm::vec3{0.0f, 1.0f, 1.0f},
+        glm::vec3{1.0f, 1.0f, 1.0f},
+        glm::vec3{1.0f, 0.0f, 1.0f},
+        glm::vec3{0.0f, 0.0f, 1.0f}};
+
+    const std::array cube_indices{
+        glm::uvec3{0u, 2u, 1u},
+        glm::uvec3{0u, 3u, 2u},
+        glm::uvec3{0u, 1u, 6u},
+        glm::uvec3{0u, 6u, 7u},
+        glm::uvec3{1u, 2u, 5u},
+        glm::uvec3{1u, 5u, 6u},
+        glm::uvec3{3u, 4u, 5u},
+        glm::uvec3{3u, 5u, 2u},
+        glm::uvec3{0u, 4u, 3u},
+        glm::uvec3{0u, 7u, 4u},
+        glm::uvec3{4u, 7u, 6u},
+        glm::uvec3{4u, 6u, 5u}};
 
     // save segments as .obj
     std::vector<glm::vec3> vertices;
     std::vector<glm::uvec3> indices;
     std::for_each(segments.cbegin(), segments.cend(), [&](Segment s) noexcept {
-        auto T = glm::translate(glm::vec3{s.x + 0.5f, s.y + 0.5f, (s.z_min + s.z_max) * 0.5f + 0.5f});
-        auto S = glm::scale(glm::vec3{1.0f, 1.0f, s.z_max - s.z_min + 1.0f});
-        auto M = T * S;
-        for (auto i = 0u; i < cube_vertices.size(); i += 3u) {
-            auto i0 = static_cast<uint32_t>(vertices.size());
-            for (auto j = 0u; j < 3u; j++) {
-                auto v = glm::vec3{M * glm::vec4{cube_vertices[i + j], 1.0f}};
-                vertices.emplace_back(v * (2.0f / static_cast<float>(resolution)) - 1.0f + glm::vec3{0.0f, 1.0f, 0.0f});
-            }
-            indices.emplace_back(glm::uvec3{i0, i0 + 1, i0 + 2});
-        }
+        auto e = glm::vec3{1.0f, 1.0f, s.z_max - s.z_min + 1.0f};
+        auto t = glm::vec3{s.x, s.y, s.z_min};
+        auto dy = glm::vec3{0.0f, 1.0f, 0.0f};
+        auto scale = 2.0f / static_cast<float>(resolution);
+        auto index_base = static_cast<uint32_t>(vertices.size());
+        for (auto v : cube_vertices) { vertices.emplace_back((v * e + t) * scale - 1.0f + dy); }
+        for (auto f : cube_indices) { indices.emplace_back(f + index_base); }
     });
-    
+
     std::ofstream file{"test.obj"};
     file << std::setprecision(10);
     for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }

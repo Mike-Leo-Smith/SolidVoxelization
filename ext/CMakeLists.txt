@@ -44,3 +44,9 @@ if (NOT GLFW3_FOUND)
     add_subdirectory(glfw)
 endif ()
 target_link_libraries(sv-ext INTERFACE glfw)
+
+add_subdirectory(glad)
+target_link_libraries(sv-ext INTERFACE glad)
+
+add_subdirectory(imgui)
+target_link_libraries(sv-ext INTERFACE imgui)

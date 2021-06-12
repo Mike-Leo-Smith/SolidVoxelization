@@ -5,7 +5,7 @@
 
 int main() {
 
-    auto mesh = Mesh::load("data/bunny.obj");
+    auto mesh = Mesh::load("/Users/mike/Downloads/happy_recon/happy_vrip.ply");
 
     static constexpr auto resolution = 1024;
 
