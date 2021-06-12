@@ -7,3 +7,9 @@
 [submodule "ext/embree"]
 	path = ext/embree
 	url = https://github.com/embree/embree.git
+[submodule "ext/glfw"]
+	path = ext/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "ext/imgui/imgui"]
+	path = ext/imgui/imgui
+	url = https://github.com/ocornut/imgui.git

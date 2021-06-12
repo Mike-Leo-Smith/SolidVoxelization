@@ -32,12 +32,12 @@ int main() {
         }
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        for (auto &&ray_hit : rays) { mesh->trace_closest(&ray_hit); }
-        //        mesh->trace_closest(rays);
+        //        for (auto &&ray_hit : rays) { mesh->trace_closest(&ray_hit); }
+        mesh->trace_closest(rays);
         auto t1 = std::chrono::high_resolution_clock::now();
 
         using namespace std::chrono_literals;
-        std::cout << "Rendering TIme: " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
+        std::cout << "Rendering Time: " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
         for (auto i = 0u; i < 1024U * 1024u; i++) {
             auto &&pixel = reinterpret_cast<glm::vec3 *>(image.data)[i];
             auto hit = rays[i].hit;
@@ -61,7 +61,7 @@ int main() {
         } else if (key == 's') {
             R = glm::rotate(R, glm::radians(-5.0f), glm::vec3{1.0f, 0.0f, 0.0f});
         } else if (key == ' ') {
-            auto volume = Volume::from(*mesh, 64u, R);
+            auto volume = Volume::from(*mesh, 256u, R);
         }
     }
     cv::imwrite("normal.exr", image);
