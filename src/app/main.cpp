@@ -21,9 +21,7 @@ void with_imgui_window(const char *name, bool *is_open, ImGuiWindowFlags flags, 
 
 int main(int, char **) {
 
-    std::cout << "Hello!" << std::endl;
-
-    auto mesh = Mesh::load(std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "bunny.obj");
+    auto mesh = Mesh::load(std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "cow.obj");
     std::unique_ptr<Volume> volume{nullptr};
 
     Stream stream;
@@ -47,21 +45,21 @@ int main(int, char **) {
     glm::vec3 light_position{-3.0f, 2.0f, 5.0f};
     glm::vec3 light_emission{20.0f};
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
-    
+
     auto voxelization_level = 6u;
 
     float camera_fov = 35.0f;
     float camera_distance = 3.0f;
     Camera camera{glm::uvec2{resolution}, camera_fov, camera_distance};
+    const auto initial_camera = camera;
 
     glm::mat4 world_to_object{1.0f};
     glm::mat4 object_to_world{1.0f};
 
     Framerate framerate;
     window.run([&] {
-        
         auto ray_origin = camera.position();
-        
+
         // render mesh
         stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
             auto x = xy.x;
@@ -84,7 +82,7 @@ int main(int, char **) {
         stream.dispatch_1d(resolution * resolution, [&, vb = mesh->vertices(), ib = mesh->indices()](uint32_t tid) {
             auto hit = rays[tid].hit;
             auto radiance = [&] {
-                if (hit.geom_id == Hit::invalid) { return glm::vec3{}; }
+                if (hit.geom_id == Hit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                 auto ng = normalize(hit.ng);
                 auto tri = ib[hit.prim_id];
                 auto p0 = vb[tri.x];
@@ -139,7 +137,7 @@ int main(int, char **) {
             stream.dispatch_1d(resolution * resolution, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](uint32_t tid) {
                 auto hit = rays[tid].hit;
                 auto radiance = [&] {
-                    if (hit.geom_id == Hit::invalid) { return glm::vec3{}; }
+                    if (hit.geom_id == Hit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                     auto ng = glm::normalize(glm::mat3{object_to_world} * hit.ng);
                     auto tri = ib[hit.prim_id];
                     auto p0 = vb[tri.x];
@@ -195,81 +193,87 @@ int main(int, char **) {
             if (ImGui::SliderFloat3("Light Emission", &light_emission.x, 0.0f, 100.0f, "%.1f")) { framerate.clear(); }
             if (ImGui::ColorEdit3("Albedo", &albedo.x, ImGuiColorEditFlags_Float)) { framerate.clear(); }
             ImGui::SliderInt("Voxelization Level", reinterpret_cast<int *>(&voxelization_level), 0, 10, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput);
+            if (ImGui::Button("Generate") || glfwGetKey(window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS) {
+                auto vox_res = 1u << voxelization_level;
+                volume = Volume::from(*mesh, vox_res, camera.rotation_to_world());// TODO...
+                auto rot = glm::mat4{camera.rotation_to_world()};
+                object_to_world = rot * glm::translate(glm::vec3{-1.0f}) * glm::scale(glm::vec3{2.0f / vox_res});
+                world_to_object = glm::scale(glm::vec3{vox_res * 0.5f}) * glm::translate(glm::vec3{1.0f}) * glm::inverse(rot);
+                framerate.clear();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Capture")) {
+                mesh_display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
+                    stbi_write_png("mesh.png", resolution, resolution, 4, pixels.data(), 0);
+                });
+                if (volume != nullptr) {
+                    volume_display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
+                        stbi_write_png("volume.png", resolution, resolution, 4, pixels.data(), 0);
+                    });
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset Camera") || glfwGetKey(window.handle(), GLFW_KEY_R) == GLFW_PRESS) {
+                camera = initial_camera;
+                framerate.clear();
+            }
         });
 
         with_imgui_window("Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
             ImGui::Image(reinterpret_cast<void *>(mesh_display_buffer.handle()), {resolution, resolution});
         });
-        
+
         if (volume != nullptr) {
             with_imgui_window("Volume", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
                 ImGui::Image(reinterpret_cast<void *>(volume_display_buffer.handle()), {resolution, resolution});
             });
         }
 
-        if (glfwGetKey(window.handle(), GLFW_KEY_Q) == GLFW_PRESS) {
-            mesh_display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
-                stbi_write_png("mesh.png", resolution, resolution, 4, pixels.data(), 0);
-            });
-            if (volume != nullptr) {
-                volume_display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
-                    stbi_write_png("volume.png", resolution, resolution, 4, pixels.data(), 0);
-                });
-            }
-            window.notify_close();
-        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_ESCAPE) == GLFW_PRESS) { window.notify_close(); }
 
         // process keys...
-        if (glfwGetKey(window.handle(), GLFW_KEY_LEFT) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_A) == GLFW_PRESS) {
             camera.rotate_y(-3.0f);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_RIGHT) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_D) == GLFW_PRESS) {
             camera.rotate_y(3.0f);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_UP) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_W) == GLFW_PRESS) {
             camera.rotate_x(-3.0f);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_DOWN) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_S) == GLFW_PRESS) {
             camera.rotate_x(3.0f);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_COMMA) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_Q) == GLFW_PRESS) {
             camera.rotate_z(-3.0f);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_PERIOD) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_E) == GLFW_PRESS) {
             camera.rotate_z(3.0f);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_MINUS) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_Z) == GLFW_PRESS) {
             camera_distance = std::max(camera_distance / 1.02f, 1.0f);
             camera.set_distance(camera_distance);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_EQUAL) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_X) == GLFW_PRESS) {
             camera_distance = camera_distance * 1.02f;
             camera.set_distance(camera_distance);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_Z) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_EQUAL) == GLFW_PRESS) {
             camera_fov = std::max(camera_fov / 1.05f, 1.0f);
             camera.set_fov(camera_fov);
             framerate.clear();
         }
-        if (glfwGetKey(window.handle(), GLFW_KEY_X) == GLFW_PRESS) {
+        if (glfwGetKey(window.handle(), GLFW_KEY_MINUS) == GLFW_PRESS) {
             camera_fov = std::min(camera_fov * 1.05f, 150.0f);
             camera.set_fov(camera_fov);
-            framerate.clear();
-        }
-        if (glfwGetKey(window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS) {
-            auto vox_res = 1u << voxelization_level;
-            volume = Volume::from(*mesh, vox_res, camera.rotation_to_world());// TODO...
-            auto rot = glm::mat4{camera.rotation_to_world()};
-            object_to_world = rot * glm::translate(glm::vec3{-1.0f}) * glm::scale(glm::vec3{2.0f / vox_res});
-            world_to_object = glm::scale(glm::vec3{vox_res * 0.5f}) * glm::translate(glm::vec3{1.0f}) * glm::inverse(rot);
             framerate.clear();
         }
     });
