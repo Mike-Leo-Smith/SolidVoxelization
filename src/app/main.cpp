@@ -23,7 +23,7 @@ int main(int, char **) {
 
     std::cout << "Hello!" << std::endl;
 
-    auto mesh = Mesh::load("C:/Users/Mike/Desktop/SolidVoxelization/data/bunny.obj");
+    auto mesh = Mesh::load(std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "bunny.obj");
     Stream stream;
 
     static constexpr auto resolution = 512;
