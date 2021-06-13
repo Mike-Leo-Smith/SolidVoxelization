@@ -26,7 +26,7 @@ void with_imgui_window(const char *name, bool *is_open, ImGuiWindowFlags flags, 
 int main(int, char **) {
 
     auto mesh = Mesh::load("data/bunny.obj");
-    Stream stream{16};
+    Stream stream;
 
     static constexpr auto resolution = 512;
 
@@ -93,7 +93,7 @@ int main(int, char **) {
                 auto radiance = ray.t_max < 0.0f
                                     ? glm::vec3{}
                                     : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd;
-                return radiance + 0.01f;
+                return radiance + 0.003f;
             }();
             auto &&accum = accum_buffer[tid];
             auto t = 1.0f / static_cast<float>(spp);
