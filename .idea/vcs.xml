@@ -9,6 +9,8 @@
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/ext/assimp" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/ext/embree" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/glfw" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/ext/glm" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ext/imgui/imgui" vcs="Git" />
   </component>
 </project>

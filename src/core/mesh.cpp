@@ -5,14 +5,14 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <numeric>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <embree3/rtcore.h>
-#include <numeric>
 
-#include <mesh.h>
+#include <core/mesh.h>
 
 class Accel {
 

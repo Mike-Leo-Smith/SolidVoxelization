@@ -9,7 +9,7 @@
 #include <thread>
 #include <vector>
 
-#include <volume.h>
+#include <core/volume.h>
 
 class Octree {
 };

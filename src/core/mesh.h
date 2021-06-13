@@ -7,8 +7,8 @@
 #include <filesystem>
 #include <memory>
 
-#include <bbox.h>
-#include <ray.h>
+#include <core/bbox.h>
+#include <core/ray.h>
 
 class Accel;
 

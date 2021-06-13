@@ -28,9 +28,6 @@ if (NOT embree_FOUND)
 endif ()
 target_link_libraries(sv-ext INTERFACE embree)
 
-find_package(OpenCV CONFIG REQUIRED)
-target_link_libraries(sv-ext INTERFACE ${OpenCV_LIBS})
-
 find_package(OpenGL REQUIRED)
 target_link_libraries(sv-ext INTERFACE OpenGL::GL)
 
@@ -50,3 +47,6 @@ target_link_libraries(sv-ext INTERFACE glad)
 
 add_subdirectory(imgui)
 target_link_libraries(sv-ext INTERFACE imgui)
+
+add_subdirectory(stb)
+target_link_libraries(sv-ext INTERFACE stb)

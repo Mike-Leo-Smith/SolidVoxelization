@@ -8,4 +8,4 @@ add_library(imgui STATIC
             imgui/backends/imgui_impl_opengl3.cpp imgui/backends/imgui_impl_opengl3.h)
 target_include_directories(imgui PUBLIC imgui "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(imgui PUBLIC glad glfw)
-target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+target_compile_definitions(imgui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD ImTextureID=uint32_t)

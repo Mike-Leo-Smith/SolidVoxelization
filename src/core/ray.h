@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <glm/glm.hpp>
 #include <limits>
+#include <glm/glm.hpp>
 
 struct alignas(16) Ray {
 

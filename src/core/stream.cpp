@@ -5,7 +5,7 @@
 #include <mutex>
 #include <thread>
 
-#include <stream.h>
+#include <core/stream.h>
 
 class ThreadPool {
 

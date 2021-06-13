@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <mesh.h>
-#include <segment.h>
+#include <core/mesh.h>
+#include <core/segment.h>
 
 class Octree;
 
