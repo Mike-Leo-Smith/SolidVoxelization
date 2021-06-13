@@ -114,11 +114,11 @@ std::unique_ptr<Mesh> Mesh::load(const std::filesystem::path &path) noexcept {
                                    aiProcess_Triangulate
                                        | aiProcess_JoinIdenticalVertices
                                        | aiProcess_RemoveComponent
-                                       | aiProcess_PreTransformVertices
                                        | aiProcess_ImproveCacheLocality
                                        | aiProcess_OptimizeMeshes
                                        | aiProcess_OptimizeGraph
                                        | aiProcess_DropNormals);
+    
     if (model == nullptr
         || (model->mFlags & AI_SCENE_FLAGS_INCOMPLETE)
         || model->mRootNode == nullptr
