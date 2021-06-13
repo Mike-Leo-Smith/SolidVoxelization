@@ -21,7 +21,9 @@ void with_imgui_window(const char *name, bool *is_open, ImGuiWindowFlags flags, 
 
 int main(int, char **) {
 
-    auto mesh = Mesh::load("data/bunny.obj");
+    std::cout << "Hello!" << std::endl;
+
+    auto mesh = Mesh::load("C:/Users/Mike/Desktop/SolidVoxelization/data/bunny.obj");
     Stream stream;
 
     static constexpr auto resolution = 512;
@@ -182,7 +184,7 @@ int main(int, char **) {
         }
 
         with_imgui_window("Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
-            ImGui::Image(display_buffer.handle(), {resolution, resolution});
+            ImGui::Image(reinterpret_cast<void *>(display_buffer.handle()), {resolution, resolution});
         });
     });
 }
