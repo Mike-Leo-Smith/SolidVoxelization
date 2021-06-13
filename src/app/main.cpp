@@ -11,6 +11,8 @@
 #include <glm/gtc/color_space.hpp>
 #include <stb/stb_image_write.h>
 
+#include <core/camera.h>
+#include <core/framerate.h>
 #include <core/mesh.h>
 #include <core/stream.h>
 #include <core/texture.h>
@@ -32,7 +34,6 @@ int main(int, char **) {
 
     std::vector<RayHit> rays;
     rays.resize(resolution * resolution);
-    glm::mat4 R{1.0f};
 
     static constexpr auto rand = [] {
         static thread_local std::mt19937 random{std::random_device{}()};
@@ -43,25 +44,28 @@ int main(int, char **) {
     Texture<glm::u8vec4> display_buffer{resolution, resolution};
     std::vector<glm::vec3> accum_buffer(resolution * resolution);
 
-    auto spp = 0u;
-    window.run([&] {
-        spp++;
+    glm::vec3 light_position{-3.0f, 2.0f, 5.0f};
+    glm::vec3 light_emission{20.0f};
+    glm::vec3 albedo{1.0f, 1.0f, 1.0f};
 
-        auto t0 = std::chrono::high_resolution_clock::now();
-        auto omega = glm::mat3{R} * glm::vec3{0.0f, 0.0f, -1.0f};
-        stream.dispatch_2d({resolution, resolution}, [omega, R, &rays](glm::uvec2 xy) noexcept {
+    float camera_fov = 35.0f;
+    float camera_distance = 3.0f;
+    Camera camera{glm::uvec2{resolution}, camera_fov, camera_distance};
+
+    Framerate framerate;
+    window.run([&] {
+        auto ray_origin = camera.position();
+        stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
             auto x = xy.x;
             auto y = xy.y;
             auto index = y * resolution + x;
             auto &&r = rays[index];
-            constexpr auto scale = 2.0f / resolution;
-            auto dx = (x + rand()) * scale - 1.0f;
-            auto dy = 1.0f - (y + rand()) * scale;
-            auto dz = 2.0f;
-            r.ray.o = glm::vec3{R * glm::vec4{dx, dy, dz, 1.0f}};
+            auto dx = rand();
+            auto dy = rand();
+            r.ray.o = ray_origin;
             r.ray.t_min = 0.0f;
             r.ray.t_max = std::numeric_limits<float>::infinity();
-            r.ray.d = omega;
+            r.ray.d = camera.direction(glm::vec2{xy} + glm::vec2{dx, dy});
             r.hit.geom_id = Hit::invalid;
         });
 
@@ -71,8 +75,6 @@ int main(int, char **) {
 
         stream.dispatch_1d(resolution * resolution, [&, vb = mesh->vertices(), ib = mesh->indices()](uint32_t tid) {
             auto hit = rays[tid].hit;
-            glm::vec3 light_position{-3.0f, 2.0f, 5.0f};
-            glm::vec3 light_emission{20.0f};
             auto radiance = [&] {
                 if (hit.geom_id == Hit::invalid) { return glm::vec3{}; }
                 auto ng = glm::normalize(hit.ng);
@@ -92,11 +94,11 @@ int main(int, char **) {
                 mesh->trace_any(&ray);
                 auto radiance = ray.t_max < 0.0f
                                     ? glm::vec3{}
-                                    : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd;
-                return radiance + 0.003f;
+                                    : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd * albedo;
+                return radiance + 0.003f * albedo;
             }();
             auto &&accum = accum_buffer[tid];
-            auto t = 1.0f / static_cast<float>(spp);
+            auto t = 1.0f / static_cast<float>(framerate.count() + 1u);
             accum = glm::mix(accum, radiance, t);
         });
 
@@ -105,10 +107,30 @@ int main(int, char **) {
                 pixels[tid] = {glm::clamp(glm::convertLinearToSRGB(accum_buffer[tid]) * 255.0f, 0.0f, 255.0f), 255};
             });
         });
-        auto t1 = std::chrono::high_resolution_clock::now();
 
-        using namespace std::chrono_literals;
-        std::cout << "Rendering Time: " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
+        auto dt = framerate.tick();
+        auto fps = framerate.fps();
+        auto spp = framerate.count();
+
+        with_imgui_window("Console", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize, [&] {
+            ImGui::Text("Samples: %llu", spp);
+            ImGui::SameLine();
+            ImGui::Spacing();
+            ImGui::SameLine();
+            ImGui::Text("Time: %.2lf ms", dt);
+            ImGui::SameLine();
+            ImGui::Spacing();
+            ImGui::SameLine();
+            ImGui::Text("FPS: %.2lf", fps);
+            ImGui::Text("Camera Distance: %.2f", camera_distance);
+            ImGui::SameLine();
+            ImGui::Spacing();
+            ImGui::SameLine();
+            ImGui::Text("FoV: %.2f", camera_fov);
+            if (ImGui::SliderFloat3("Light Position", &light_position.x, -10.0f, 10.0f, "%.1f")) { framerate.clear(); }
+            if (ImGui::SliderFloat3("Light Emission", &light_emission.x, 0.0f, 100.0f, "%.1f")) { framerate.clear(); }
+            if (ImGui::ColorEdit3("Mesh Albedo", &albedo.x, ImGuiColorEditFlags_Float)) { framerate.clear(); }
+        });
 
         if (glfwGetKey(window.handle(), GLFW_KEY_Q) == GLFW_PRESS) {
             display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
@@ -118,23 +140,51 @@ int main(int, char **) {
         }
 
         if (glfwGetKey(window.handle(), GLFW_KEY_LEFT) == GLFW_PRESS) {
-            R = glm::rotate(R, glm::radians(-5.0f), glm::vec3{0.0f, 1.0f, 0.0f});
-            spp = 0u;
+            camera.rotate_y(-3.0f);
+            framerate.clear();
         }
         if (glfwGetKey(window.handle(), GLFW_KEY_RIGHT) == GLFW_PRESS) {
-            R = glm::rotate(R, glm::radians(5.0f), glm::vec3{0.0f, 1.0f, 0.0f});
-            spp = 0u;
+            camera.rotate_y(3.0f);
+            framerate.clear();
         }
         if (glfwGetKey(window.handle(), GLFW_KEY_UP) == GLFW_PRESS) {
-            R = glm::rotate(R, glm::radians(-5.0f), glm::vec3{1.0f, 0.0f, 0.0f});
-            spp = 0u;
+            camera.rotate_x(-3.0f);
+            framerate.clear();
         }
         if (glfwGetKey(window.handle(), GLFW_KEY_DOWN) == GLFW_PRESS) {
-            R = glm::rotate(R, glm::radians(5.0f), glm::vec3{1.0f, 0.0f, 0.0f});
-            spp = 0u;
+            camera.rotate_x(3.0f);
+            framerate.clear();
+        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_COMMA) == GLFW_PRESS) {
+            camera.rotate_z(-3.0f);
+            framerate.clear();
+        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_PERIOD) == GLFW_PRESS) {
+            camera.rotate_z(3.0f);
+            framerate.clear();
+        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_MINUS) == GLFW_PRESS) {
+            camera_distance = std::max(camera_distance / 1.02f, 1.0f);
+            camera.set_distance(camera_distance);
+            framerate.clear();
+        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_EQUAL) == GLFW_PRESS) {
+            camera_distance = camera_distance * 1.02f;
+            camera.set_distance(camera_distance);
+            framerate.clear();
+        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_Z) == GLFW_PRESS) {
+            camera_fov = std::max(camera_fov / 1.05f, 1.0f);
+            camera.set_fov(camera_fov);
+            framerate.clear();
+        }
+        if (glfwGetKey(window.handle(), GLFW_KEY_X) == GLFW_PRESS) {
+            camera_fov = std::min(camera_fov * 1.05f, 150.0f);
+            camera.set_fov(camera_fov);
+            framerate.clear();
         }
         if (glfwGetKey(window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS) {
-            auto volume = Volume::from(*mesh, 256u, R);// TODO...
+            auto volume = Volume::from(*mesh, 256u, camera.rotation_to_world());// TODO...
         }
 
         with_imgui_window("Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
