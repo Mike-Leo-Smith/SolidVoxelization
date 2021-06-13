@@ -21,6 +21,7 @@ private:
 public:
     ~Mesh() noexcept;
     [[nodiscard]] static std::unique_ptr<Mesh> load(const std::filesystem::path &path) noexcept;
+    [[nodiscard]] static std::unique_ptr<Mesh> build(std::span<const glm::vec3> vertices, std::span<const glm::uvec3> indices) noexcept;
     [[nodiscard]] std::span<const glm::vec3> vertices() const noexcept;
     [[nodiscard]] std::span<const glm::uvec3> indices() const noexcept;
     void trace_closest(RayHit *ray) const noexcept;

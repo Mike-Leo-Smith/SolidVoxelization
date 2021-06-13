@@ -13,6 +13,7 @@ class Volume {
 
 private:
     std::unique_ptr<Octree> _octree;
+    std::unique_ptr<Mesh> _mesh;
     size_t _resolution;
 
 private:
@@ -24,4 +25,7 @@ public:
         const Mesh &mesh, size_t resolution,
         glm::mat4 camera_to_world = glm::identity<glm::mat4>()) noexcept;
     [[nodiscard]] auto resolution() const noexcept { return _resolution; }
+    
+    // TODO: temp hack...
+    [[nodiscard]] auto mesh() const noexcept { return _mesh.get(); }
 };

@@ -24,6 +24,8 @@ int main(int, char **) {
     std::cout << "Hello!" << std::endl;
 
     auto mesh = Mesh::load(std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "bunny.obj");
+    std::unique_ptr<Volume> volume{nullptr};
+
     Stream stream;
 
     static constexpr auto resolution = 512;
@@ -37,20 +39,30 @@ int main(int, char **) {
     };
 
     Window window{"Solid Voxelization"};
-    Texture<glm::u8vec4> display_buffer{resolution, resolution};
-    std::vector<glm::vec3> accum_buffer(resolution * resolution);
+    Texture<glm::u8vec4> mesh_display_buffer{resolution, resolution};
+    Texture<glm::u8vec4> volume_display_buffer{resolution, resolution};
+    std::vector<glm::vec3> mesh_accum_buffer(resolution * resolution);
+    std::vector<glm::vec3> volume_accum_buffer(resolution * resolution);
 
     glm::vec3 light_position{-3.0f, 2.0f, 5.0f};
     glm::vec3 light_emission{20.0f};
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
+    
+    auto voxelization_level = 6u;
 
     float camera_fov = 35.0f;
     float camera_distance = 3.0f;
     Camera camera{glm::uvec2{resolution}, camera_fov, camera_distance};
 
+    glm::mat4 world_to_object{1.0f};
+    glm::mat4 object_to_world{1.0f};
+
     Framerate framerate;
     window.run([&] {
+        
         auto ray_origin = camera.position();
+        
+        // render mesh
         stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
             auto x = xy.x;
             auto y = xy.y;
@@ -73,7 +85,7 @@ int main(int, char **) {
             auto hit = rays[tid].hit;
             auto radiance = [&] {
                 if (hit.geom_id == Hit::invalid) { return glm::vec3{}; }
-                auto ng = glm::normalize(hit.ng);
+                auto ng = normalize(hit.ng);
                 auto tri = ib[hit.prim_id];
                 auto p0 = vb[tri.x];
                 auto p1 = vb[tri.y];
@@ -93,16 +105,72 @@ int main(int, char **) {
                                     : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd * albedo;
                 return radiance + 0.003f * albedo;
             }();
-            auto &&accum = accum_buffer[tid];
+            auto &&accum = mesh_accum_buffer[tid];
             auto t = 1.0f / static_cast<float>(framerate.count() + 1u);
             accum = glm::mix(accum, radiance, t);
         });
 
-        display_buffer.with_pixels_uploading([&](auto pixels) noexcept {
+        mesh_display_buffer.with_pixels_uploading([&](auto pixels) noexcept {
             stream.dispatch_1d(resolution * resolution, [&](auto tid) noexcept {
-                pixels[tid] = {glm::clamp(glm::convertLinearToSRGB(accum_buffer[tid]) * 255.0f, 0.0f, 255.0f), 255};
+                pixels[tid] = {glm::clamp(glm::convertLinearToSRGB(mesh_accum_buffer[tid]) * 255.0f, 0.0f, 255.0f), 255};
             });
         });
+
+        // render volume
+        if (volume != nullptr) {
+            stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
+                auto x = xy.x;
+                auto y = xy.y;
+                auto index = y * resolution + x;
+                auto &&r = rays[index];
+                auto dx = rand();
+                auto dy = rand();
+                r.ray.o = glm::vec3{world_to_object * glm::vec4{ray_origin, 1.0f}};
+                r.ray.t_min = 0.0f;
+                r.ray.t_max = std::numeric_limits<float>::infinity();
+                r.ray.d = glm::normalize(glm::mat3{world_to_object} * camera.direction(glm::vec2{xy} + glm::vec2{dx, dy}));
+                r.hit.geom_id = Hit::invalid;
+            });
+
+            stream.dispatch_1d(resolution, 16u, [mesh = volume->mesh(), &rays](uint32_t tid) noexcept {
+                mesh->trace_closest(std::span{rays}.subspan(tid * resolution, resolution));
+            });
+
+            stream.dispatch_1d(resolution * resolution, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](uint32_t tid) {
+                auto hit = rays[tid].hit;
+                auto radiance = [&] {
+                    if (hit.geom_id == Hit::invalid) { return glm::vec3{}; }
+                    auto ng = glm::normalize(glm::mat3{object_to_world} * hit.ng);
+                    auto tri = ib[hit.prim_id];
+                    auto p0 = vb[tri.x];
+                    auto p1 = vb[tri.y];
+                    auto p2 = vb[tri.z];
+                    auto p = glm::vec3{object_to_world * glm::vec4{(1.0f - hit.uv.x - hit.uv.y) * p0 + hit.uv.x * p1 + hit.uv.y * p2, 1.0f}};
+                    auto L = light_position - p;
+                    auto inv_dd = 1.0f / glm::dot(L, L);
+                    L = glm::normalize(L);
+                    auto ray = rays[tid].ray;
+                    ray.o = p + 1e-4f * ng;
+                    ray.d = L;
+                    ray.t_min = 0.0f;
+                    ray.t_max = std::numeric_limits<float>::max();
+                    volume->mesh()->trace_any(&ray);
+                    auto radiance = ray.t_max < 0.0f
+                                        ? glm::vec3{}
+                                        : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd * albedo;
+                    return radiance + 0.003f * albedo;
+                }();
+                auto &&accum = volume_accum_buffer[tid];
+                auto t = 1.0f / static_cast<float>(framerate.count() + 1u);
+                accum = glm::mix(accum, radiance, t);
+            });
+
+            volume_display_buffer.with_pixels_uploading([&](auto pixels) noexcept {
+                stream.dispatch_1d(resolution * resolution, [&](auto tid) noexcept {
+                    pixels[tid] = {glm::clamp(glm::convertLinearToSRGB(volume_accum_buffer[tid]) * 255.0f, 0.0f, 255.0f), 255};
+                });
+            });
+        }
 
         auto dt = framerate.tick();
         auto fps = framerate.fps();
@@ -125,16 +193,33 @@ int main(int, char **) {
             ImGui::Text("FoV: %.2f", camera_fov);
             if (ImGui::SliderFloat3("Light Position", &light_position.x, -10.0f, 10.0f, "%.1f")) { framerate.clear(); }
             if (ImGui::SliderFloat3("Light Emission", &light_emission.x, 0.0f, 100.0f, "%.1f")) { framerate.clear(); }
-            if (ImGui::ColorEdit3("Mesh Albedo", &albedo.x, ImGuiColorEditFlags_Float)) { framerate.clear(); }
+            if (ImGui::ColorEdit3("Albedo", &albedo.x, ImGuiColorEditFlags_Float)) { framerate.clear(); }
+            ImGui::SliderInt("Voxelization Level", reinterpret_cast<int *>(&voxelization_level), 0, 10, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput);
         });
 
-        if (glfwGetKey(window.handle(), GLFW_KEY_Q) == GLFW_PRESS) {
-            display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
-                stbi_write_png("test.png", resolution, resolution, 4, pixels.data(), 0);
+        with_imgui_window("Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
+            ImGui::Image(reinterpret_cast<void *>(mesh_display_buffer.handle()), {resolution, resolution});
+        });
+        
+        if (volume != nullptr) {
+            with_imgui_window("Volume", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
+                ImGui::Image(reinterpret_cast<void *>(volume_display_buffer.handle()), {resolution, resolution});
             });
+        }
+
+        if (glfwGetKey(window.handle(), GLFW_KEY_Q) == GLFW_PRESS) {
+            mesh_display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
+                stbi_write_png("mesh.png", resolution, resolution, 4, pixels.data(), 0);
+            });
+            if (volume != nullptr) {
+                volume_display_buffer.with_pixels_downloaded([](auto pixels) noexcept {
+                    stbi_write_png("volume.png", resolution, resolution, 4, pixels.data(), 0);
+                });
+            }
             window.notify_close();
         }
 
+        // process keys...
         if (glfwGetKey(window.handle(), GLFW_KEY_LEFT) == GLFW_PRESS) {
             camera.rotate_y(-3.0f);
             framerate.clear();
@@ -180,11 +265,12 @@ int main(int, char **) {
             framerate.clear();
         }
         if (glfwGetKey(window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS) {
-            auto volume = Volume::from(*mesh, 256u, camera.rotation_to_world());// TODO...
+            auto vox_res = 1u << voxelization_level;
+            volume = Volume::from(*mesh, vox_res, camera.rotation_to_world());// TODO...
+            auto rot = glm::mat4{camera.rotation_to_world()};
+            object_to_world = rot * glm::translate(glm::vec3{-1.0f}) * glm::scale(glm::vec3{2.0f / vox_res});
+            world_to_object = glm::scale(glm::vec3{vox_res * 0.5f}) * glm::translate(glm::vec3{1.0f}) * glm::inverse(rot);
+            framerate.clear();
         }
-
-        with_imgui_window("Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
-            ImGui::Image(reinterpret_cast<void *>(display_buffer.handle()), {resolution, resolution});
-        });
     });
 }

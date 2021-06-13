@@ -159,3 +159,7 @@ void Mesh::trace_closest(RayHit *ray) const noexcept { _accel->trace_closest(*ra
 void Mesh::trace_any(Ray *ray) const noexcept { _accel->trace_any(*ray); }
 void Mesh::trace_closest(std::span<RayHit> rays, bool coherent) const noexcept { _accel->trace_closest(rays, coherent); }
 void Mesh::trace_any(std::span<Ray> rays, bool coherent) const noexcept { _accel->trace_any(rays, coherent); }
+
+std::unique_ptr<Mesh> Mesh::build(std::span<const glm::vec3> vertices, std::span<const glm::uvec3> indices) noexcept {
+    return std::unique_ptr<Mesh>{new Mesh{Accel::build(vertices, indices)}};
+}

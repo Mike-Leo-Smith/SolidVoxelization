@@ -153,18 +153,21 @@ std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::m
         auto e = glm::vec3{1.0f, 1.0f, s.z_max - s.z_min + 1.0f};
         auto t = glm::vec3{s.x, s.y, s.z_min};
         auto dy = glm::vec3{0.0f, 1.0f, 0.0f};
-        auto scale = 2.0f / static_cast<float>(resolution);
+//        auto scale = 2.0f / static_cast<float>(resolution);
         auto index_base = static_cast<uint32_t>(vertices.size());
-        for (auto v : cube_vertices) { vertices.emplace_back((v * e + t) * scale - 1.0f + dy); }
+//        for (auto v : cube_vertices) { vertices.emplace_back((v * e + t) * scale - 1.0f + dy); }
+        for (auto v : cube_vertices) { vertices.emplace_back(v * e + t); }
         for (auto f : cube_indices) { indices.emplace_back(f + index_base); }
     });
 
-    std::ofstream file{"test.obj"};
-    file << std::setprecision(10);
-    for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
-    for (auto i : indices) { file << "f " << i.x + 1u << " " << i.y + 1u << " " << i.z + 1u << "\n"; }
+//    std::ofstream file{"test.obj"};
+//    file << std::setprecision(10);
+//    for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
+//    for (auto i : indices) { file << "f " << i.x + 1u << " " << i.y + 1u << " " << i.z + 1u << "\n"; }
 
-    return std::unique_ptr<Volume>{new Volume{nullptr /* TODO */, resolution}};
+    auto volume = std::unique_ptr<Volume>{new Volume{nullptr /* TODO */, resolution}};
+    volume->_mesh = Mesh::build(vertices, indices);
+    return volume;
 }
 
 Volume::Volume(std::unique_ptr<Octree> octree, size_t resolution) noexcept
