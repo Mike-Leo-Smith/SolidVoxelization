@@ -4,8 +4,8 @@
 
 #include <iostream>
 #include <memory>
-#include <vector>
 #include <numeric>
+#include <vector>
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -42,10 +42,19 @@ private:
         std::copy_n(indices.data(), indices.size(), ib);
         _indices = {ib, indices.size()};
 
+        auto t0 = std::chrono::high_resolution_clock::now();
         rtcCommitGeometry(geometry);
         rtcAttachGeometry(_scene, geometry);
         rtcReleaseGeometry(geometry);
         rtcCommitScene(_scene);
+        auto t1 = std::chrono::high_resolution_clock::now();
+
+        using namespace std::chrono_literals;
+        std::cout << "Build acceleration structure for "
+                  << vertices.size() << " vertices and "
+                  << indices.size() << " faces in "
+                  << (t1 - t0) / 1ns * 1e-6 << "ms"
+                  << std::endl;
     }
 
     [[nodiscard]] static auto _trace_context(bool coherent) noexcept {
@@ -118,7 +127,7 @@ std::unique_ptr<Mesh> Mesh::load(const std::filesystem::path &path) noexcept {
                                        | aiProcess_OptimizeMeshes
                                        | aiProcess_OptimizeGraph
                                        | aiProcess_DropNormals);
-    
+
     if (model == nullptr
         || (model->mFlags & AI_SCENE_FLAGS_INCOMPLETE)
         || model->mRootNode == nullptr

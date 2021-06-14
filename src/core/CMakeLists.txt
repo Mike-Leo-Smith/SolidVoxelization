@@ -5,5 +5,11 @@ add_library(sv-core STATIC
             segment.h
             volume.cpp volume.h
             stream.cpp stream.h
-            texture.h window.cpp window.h camera.cpp camera.h framerate.cpp framerate.h)
+            texture.h
+            window.cpp window.h
+            camera.cpp camera.h
+            framerate.cpp framerate.h)
+target_link_libraries(sv-core PUBLIC sv-ext)
+
+add_executable(octree octree.cpp)
 target_link_libraries(sv-core PUBLIC sv-ext)

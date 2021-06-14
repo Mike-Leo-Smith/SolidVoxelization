@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
 
     auto model_path = argc > 1u
                           ? std::filesystem::canonical(argv[1])
-                          : std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "cow.obj";
+                          : std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "bunny.obj";
     auto mesh = Mesh::load(model_path);
     std::unique_ptr<Volume> volume{nullptr};
 
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
             if (ImGui::SliderFloat3("Light Position", &light_position.x, -10.0f, 10.0f, "%.1f")) { framerate.clear(); }
             if (ImGui::SliderFloat3("Light Emission", &light_emission.x, 0.0f, 100.0f, "%.1f")) { framerate.clear(); }
             if (ImGui::ColorEdit3("Albedo", &albedo.x, ImGuiColorEditFlags_Float)) { framerate.clear(); }
-            ImGui::SliderInt("Voxelization Level", reinterpret_cast<int *>(&voxelization_level), 0, 10, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput);
+            ImGui::SliderInt("Voxelization Level", reinterpret_cast<int *>(&voxelization_level), 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_ClampOnInput);
             if (ImGui::Button("Generate") || glfwGetKey(window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS) {
                 auto vox_res = 1u << voxelization_level;
                 volume = Volume::from(*mesh, vox_res, camera.rotation_to_world());// TODO...
