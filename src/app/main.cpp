@@ -79,8 +79,10 @@ int main(int argc, char *argv[]) {
             r.hit.geom_id = Hit::invalid;
         });
 
-        stream.dispatch_1d(resolution, 16u, [&mesh, &rays](uint32_t tid) noexcept {
-            mesh->trace_closest(std::span{rays}.subspan(tid * resolution, resolution));
+        stream.dispatch_2d(glm::uvec2{resolution}, [&mesh, &rays](glm::uvec2 tid) noexcept {
+            auto index = tid.y * resolution + tid.x;
+            mesh->trace_closest(&rays[index]);
+            //            mesh->trace_closest(std::span{rays}.subspan(tid * resolution, resolution));
         });
 
         stream.dispatch_1d(resolution * resolution, [&, vb = mesh->vertices(), ib = mesh->indices()](uint32_t tid) {
@@ -134,8 +136,9 @@ int main(int argc, char *argv[]) {
                 r.hit.geom_id = Hit::invalid;
             });
 
-            stream.dispatch_1d(resolution, 1u, [mesh = volume->mesh(), &rays](uint32_t tid) noexcept {
-                mesh->trace_closest(std::span{rays}.subspan(tid * resolution, resolution));
+            stream.dispatch_2d(glm::uvec2{resolution}, [mesh = volume->mesh(), &rays](glm::uvec2 tid) noexcept {
+                auto index = tid.y * resolution + tid.x;
+                mesh->trace_closest(&rays[index]);
             });
 
             stream.dispatch_1d(resolution * resolution, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](uint32_t tid) {
