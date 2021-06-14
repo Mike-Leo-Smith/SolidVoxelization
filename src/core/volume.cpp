@@ -6,9 +6,9 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <mutex>
 
 #include <core/volume.h>
 
@@ -63,11 +63,22 @@ class Octree {
                             ray_hit.ray.t_max = std::numeric_limits<float>::infinity();
                             ray_hit.hit.geom_id = Hit::invalid;
                             mesh.trace_closest(&ray_hit);
-                            if (ray_hit.hit.geom_id == Hit::invalid) { break; }
+                            // ray exits the scene
+                            if (ray_hit.hit.geom_id == Hit::invalid) {
+                                if (counter > 0) {// bad case, add surface hit & exit
+                                    auto z = glm::clamp((1.5f - t_start * 0.5f) * res_f - 0.5f, 0.0f, res_f - 1.0f);
+                                    Segment segment{static_cast<uint16_t>(x),
+                                                    static_cast<uint16_t>(y),
+                                                    static_cast<uint16_t>(z),
+                                                    static_cast<uint16_t>(z)};
+                                    segment_cache.emplace_back(segment);
+                                }
+                                break;
+                            }
                             // process the segment
                             if (auto c = glm::dot(ray_dir, ray_hit.hit.ng); c < 0.0f) {// front face
                                 if (++counter == 1) { t_start = ray_hit.ray.t_max; }
-                            } else if (c > 0.0f) {
+                            } else if (c > 0.0f) {   // back face
                                 if (--counter == 0) {// found segment
                                     auto z_range = (1.5f - glm::vec2{ray_hit.ray.t_max, t_start} * 0.5f) * res_f;
                                     if (auto z = glm::uvec2{glm::clamp(z_range + glm::vec2{0.5f, -0.5f}, 0.0f, res_f - 1.0f)}; z.x <= z.y) {
@@ -77,7 +88,13 @@ class Octree {
                                                         static_cast<uint16_t>(z.y)};
                                         segment_cache.emplace_back(segment);
                                     }
-                                } else if (counter < 0) {// bad case, reset
+                                } else if (counter < 0) {// bad case, add surface voxel & reset
+                                    auto z = glm::clamp((1.5f - ray_hit.ray.t_max * 0.5f) * res_f + 0.5f, 0.0f, res_f - 1.0f);
+                                    Segment segment{static_cast<uint16_t>(x),
+                                                    static_cast<uint16_t>(y),
+                                                    static_cast<uint16_t>(z),
+                                                    static_cast<uint16_t>(z)};
+                                    segment_cache.emplace_back(segment);
                                     counter = 0;
                                 }
                             }
@@ -153,17 +170,15 @@ std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::m
         auto e = glm::vec3{1.0f, 1.0f, s.z_max - s.z_min + 1.0f};
         auto t = glm::vec3{s.x, s.y, s.z_min};
         auto dy = glm::vec3{0.0f, 1.0f, 0.0f};
-//        auto scale = 2.0f / static_cast<float>(resolution);
         auto index_base = static_cast<uint32_t>(vertices.size());
-//        for (auto v : cube_vertices) { vertices.emplace_back((v * e + t) * scale - 1.0f + dy); }
         for (auto v : cube_vertices) { vertices.emplace_back(v * e + t); }
         for (auto f : cube_indices) { indices.emplace_back(f + index_base); }
     });
 
-//    std::ofstream file{"test.obj"};
-//    file << std::setprecision(10);
-//    for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
-//    for (auto i : indices) { file << "f " << i.x + 1u << " " << i.y + 1u << " " << i.z + 1u << "\n"; }
+    //    std::ofstream file{"test.obj"};
+    //    file << std::setprecision(10);
+    //    for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
+    //    for (auto i : indices) { file << "f " << i.x + 1u << " " << i.y + 1u << " " << i.z + 1u << "\n"; }
 
     auto volume = std::unique_ptr<Volume>{new Volume{nullptr /* TODO */, resolution}};
     volume->_mesh = Mesh::build(vertices, indices);

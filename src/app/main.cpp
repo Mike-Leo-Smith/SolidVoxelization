@@ -15,13 +15,17 @@
 
 template<typename F>
 void with_imgui_window(const char *name, bool *is_open, ImGuiWindowFlags flags, F &&f) {
-    if (ImGui::Begin(name, is_open, flags)) { f(); }
+    ImGui::Begin(name, is_open, flags);
+    f();
     ImGui::End();
 }
 
-int main(int, char **) {
+int main(int argc, char *argv[]) {
 
-    auto mesh = Mesh::load(std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "cow.obj");
+    auto model_path = argc > 1u
+                          ? std::filesystem::canonical(argv[1])
+                          : std::filesystem::canonical(PROJECT_BASE_DIR) / "data" / "cow.obj";
+    auto mesh = Mesh::load(model_path);
     std::unique_ptr<Volume> volume{nullptr};
 
     Stream stream;
@@ -46,7 +50,7 @@ int main(int, char **) {
     glm::vec3 light_emission{20.0f};
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
 
-    auto voxelization_level = 6u;
+    auto voxelization_level = 7u;
 
     float camera_fov = 35.0f;
     float camera_distance = 3.0f;
@@ -130,7 +134,7 @@ int main(int, char **) {
                 r.hit.geom_id = Hit::invalid;
             });
 
-            stream.dispatch_1d(resolution, 16u, [mesh = volume->mesh(), &rays](uint32_t tid) noexcept {
+            stream.dispatch_1d(resolution, 1u, [mesh = volume->mesh(), &rays](uint32_t tid) noexcept {
                 mesh->trace_closest(std::span{rays}.subspan(tid * resolution, resolution));
             });
 
