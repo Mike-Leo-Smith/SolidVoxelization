@@ -32,11 +32,10 @@ struct Segment
     Segment(int _x = 0, int _y = 0, int _z_min = 0, int _z_max = 0) : x(_x), y(_y), z_min(_z_min), z_max(_z_max) {}
 };
 
-struct Ray
-{
+struct EmbreeRay {
     Vec3<float> origin;
     Vec3<float> direction;
-    Ray(Vec3<float> _origin = Vec3<float>(), Vec3<float> _direction = Vec3<float>()): origin(_origin), direction(_direction) {}
+    EmbreeRay(Vec3<float> _origin = Vec3<float>(), Vec3<float> _direction = Vec3<float>()): origin(_origin), direction(_direction) {}
 };
 
 struct OctNode
@@ -300,7 +299,7 @@ void obj(OctNode* node, std::string filename)
     out.close();
 }
 
-float intersection_f(Ray ray, Ray normal)
+float intersection_f(EmbreeRay ray, EmbreeRay normal)
 {
     Vec3<float> t = ray.origin - normal.origin;
     Vec3<float>& n = normal.direction;
@@ -308,9 +307,9 @@ float intersection_f(Ray ray, Ray normal)
     return -t.dot(n) / dir.dot(n);
 }
 
-float intersection_f_x(Ray ray, int x, int y_min, int y_max, int z_min, int z_max)
+float intersection_f_x(EmbreeRay ray, int x, int y_min, int y_max, int z_min, int z_max)
 {
-    Ray normal(Vec3<float>(x, y_min, z_min), Vec3<float>(1, 0, 0));
+    EmbreeRay normal(Vec3<float>(x, y_min, z_min), Vec3<float>(1, 0, 0));
     float f = intersection_f(ray, normal);
     
     Vec3<float> point = ray.origin + ray.direction * f;
@@ -323,9 +322,9 @@ float intersection_f_x(Ray ray, int x, int y_min, int y_max, int z_min, int z_ma
         return -1;
 }
 
-float intersection_f_y(Ray ray, int x_min, int x_max, int y, int z_min, int z_max)
+float intersection_f_y(EmbreeRay ray, int x_min, int x_max, int y, int z_min, int z_max)
 {
-    Ray normal(Vec3<float>(x_min, y, z_min), Vec3<float>(0, 1, 0));
+    EmbreeRay normal(Vec3<float>(x_min, y, z_min), Vec3<float>(0, 1, 0));
     float f = intersection_f(ray, normal);
 
     Vec3<float> point = ray.origin + ray.direction * f;
@@ -338,9 +337,9 @@ float intersection_f_y(Ray ray, int x_min, int x_max, int y, int z_min, int z_ma
         return -1;
 }
 
-float intersection_f_z(Ray ray, int x_min, int x_max, int y_min, int y_max, int z)
+float intersection_f_z(EmbreeRay ray, int x_min, int x_max, int y_min, int y_max, int z)
 {
-    Ray normal(Vec3<float>(x_min, y_min, z), Vec3<float>(0, 0, 1));
+    EmbreeRay normal(Vec3<float>(x_min, y_min, z), Vec3<float>(0, 0, 1));
     float f = intersection_f(ray, normal);
 
     Vec3<float> point = ray.origin + ray.direction * f;
@@ -353,7 +352,7 @@ float intersection_f_z(Ray ray, int x_min, int x_max, int y_min, int y_max, int 
         return -1;
 }
 
-Vec3<float> intersection(Ray ray, OctNode* node)
+Vec3<float> intersection(EmbreeRay ray, OctNode* node)
 {
     if (node->status == OctNode::EMPTY)
         return Vec3<float>(-1, -1, -1);

@@ -7,8 +7,7 @@
 #include <limits>
 #include <glm/glm.hpp>
 
-struct alignas(16) Ray {
-
+struct alignas(16) EmbreeRay {
     glm::vec3 o;
     float t_min;
     glm::vec3 d;
@@ -19,7 +18,7 @@ struct alignas(16) Ray {
     unsigned int flags;
 };
 
-struct alignas(16) Hit {
+struct alignas(16) EmbreeHit {
     
     static constexpr auto invalid = std::numeric_limits<uint32_t>::max();
 
@@ -30,7 +29,21 @@ struct alignas(16) Hit {
     unsigned int inst_id;
 };
 
-struct RayHit {
-    Ray ray;
-    Hit hit;
+struct EmbreeRayHit {
+    EmbreeRay ray;
+    EmbreeHit hit;
+};
+
+struct alignas(16) Ray {
+    glm::vec3 o;
+    float t_min;
+    glm::vec3 d;
+    float t_max;
+};
+
+struct alignas(16) Hit {
+    glm::vec3 p;
+    float t;
+    glm::vec3 ng;
+    uint32_t front;
 };

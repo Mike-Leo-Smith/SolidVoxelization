@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
 
     static constexpr auto resolution = 512;
 
-    std::vector<RayHit> rays;
+    std::vector<EmbreeRayHit> rays;
     rays.resize(resolution * resolution);
 
     static constexpr auto rand = [] {
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
             r.ray.t_min = 0.0f;
             r.ray.t_max = std::numeric_limits<float>::infinity();
             r.ray.d = camera.direction(glm::vec2{xy} + glm::vec2{dx, dy});
-            r.hit.geom_id = Hit::invalid;
+            r.hit.geom_id = EmbreeHit::invalid;
         });
 
         stream.dispatch_2d(glm::uvec2{resolution}, [&mesh, &rays](glm::uvec2 tid) noexcept {
@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
         stream.dispatch_1d(resolution * resolution, [&, vb = mesh->vertices(), ib = mesh->indices()](uint32_t tid) {
             auto hit = rays[tid].hit;
             auto radiance = [&] {
-                if (hit.geom_id == Hit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
+                if (hit.geom_id == EmbreeHit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                 auto ng = normalize(hit.ng);
                 auto tri = ib[hit.prim_id];
                 auto p0 = vb[tri.x];
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
                 r.ray.t_min = 0.0f;
                 r.ray.t_max = std::numeric_limits<float>::infinity();
                 r.ray.d = glm::normalize(glm::mat3{world_to_object} * camera.direction(glm::vec2{xy} + glm::vec2{dx, dy}));
-                r.hit.geom_id = Hit::invalid;
+                r.hit.geom_id = EmbreeHit::invalid;
             });
 
             stream.dispatch_2d(glm::uvec2{resolution}, [mesh = volume->mesh(), &rays](glm::uvec2 tid) noexcept {
@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
             stream.dispatch_1d(resolution * resolution, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](uint32_t tid) {
                 auto hit = rays[tid].hit;
                 auto radiance = [&] {
-                    if (hit.geom_id == Hit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
+                    if (hit.geom_id == EmbreeHit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                     auto ng = glm::normalize(glm::mat3{object_to_world} * hit.ng);
                     auto tri = ib[hit.prim_id];
                     auto p0 = vb[tri.x];

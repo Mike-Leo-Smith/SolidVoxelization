@@ -200,7 +200,7 @@ private:
         auto node = _nodes[node_index];
         if (node.empty()) { return; }
         if (node.full()) { return add_cube(origin, res); }
-        
+
         // leaf
         if (auto half_res = res / 2u; half_res == 1) {
             for (auto i = 0u; i < 8u; i++) {
@@ -214,9 +214,13 @@ private:
             }
         }
     }
-    
+
+    [[nodiscard]] static auto _inside(glm::uvec3 origin, uint32_t res, glm::vec3 p) noexcept {
+        return glm::all(glm::greaterThanEqual(p, glm::vec3{origin}))
+               && glm::all(glm::lessThanEqual(p, glm::vec3{origin + res}));
+    }
+
     [[nodiscard]] auto _trace_any(glm::vec3 origin, glm::vec3 direction, float t_max) const noexcept {
-    
     }
 
 public:
@@ -239,10 +243,10 @@ public:
         return Mesh::build(vertices, indices);
     }
 
-    [[nodiscard]] auto trace_closest(RayHit *ray) const noexcept {
+    [[nodiscard]] auto trace_closest(EmbreeRayHit *ray) const noexcept {
     }
 
-    [[nodiscard]] void trace_any(Ray &ray) const noexcept {
+    void trace_any(EmbreeRay &ray) const noexcept {
     }
 };
 
@@ -275,7 +279,7 @@ public:
                 auto y_offset = block / blocks_per_edge * block_size;
                 for (auto y = y_offset; y < y_offset + block_size; y++) {
                     for (auto x = x_offset; x < x_offset + block_size; x++) {
-                        RayHit ray_hit{};
+                        EmbreeRayHit ray_hit{};
                         auto dx = (static_cast<float>(x) + 0.5f) * scale - 1.0f;
                         auto dy = (static_cast<float>(y) + 0.5f) * scale - 1.0f;
                         auto dz = 2.0f;
@@ -288,10 +292,10 @@ public:
                         for (;;) {
                             ray_hit.ray.t_min = ray_hit.ray.t_max + eps;
                             ray_hit.ray.t_max = std::numeric_limits<float>::infinity();
-                            ray_hit.hit.geom_id = Hit::invalid;
+                            ray_hit.hit.geom_id = EmbreeHit::invalid;
                             mesh.trace_closest(&ray_hit);
                             // ray exits the scene
-                            if (ray_hit.hit.geom_id == Hit::invalid) {
+                            if (ray_hit.hit.geom_id == EmbreeHit::invalid) {
                                 //                                if (counter > 0) {// bad case, add surface hit & exit
                                 //                                    auto z = glm::clamp((1.5f - t_start * 0.5f) * res_f - 0.5f, 0.0f, res_f - 1.0f);
                                 //                                    Segment segment{static_cast<uint16_t>(x),

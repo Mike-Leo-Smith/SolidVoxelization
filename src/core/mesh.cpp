@@ -86,20 +86,20 @@ public:
     [[nodiscard]] auto vertices() const noexcept { return _vertices; }
     [[nodiscard]] auto indices() const noexcept { return _indices; }
 
-    void trace_closest(RayHit &ray_hit) const noexcept {
+    void trace_closest(EmbreeRayHit &ray_hit) const noexcept {
         rtcIntersect1(_scene, _trace_context(true), reinterpret_cast<RTCRayHit *>(&ray_hit));
     }
 
-    void trace_any(Ray &ray) const noexcept {
+    void trace_any(EmbreeRay &ray) const noexcept {
         rtcOccluded1(_scene, _trace_context(true), reinterpret_cast<RTCRay *>(&ray));
     }
 
-    void trace_closest(std::span<RayHit> rays, bool coherent) const noexcept {
-        rtcIntersect1M(_scene, _trace_context(coherent), reinterpret_cast<RTCRayHit *>(rays.data()), rays.size(), sizeof(RayHit));
+    void trace_closest(std::span<EmbreeRayHit> rays, bool coherent) const noexcept {
+        rtcIntersect1M(_scene, _trace_context(coherent), reinterpret_cast<RTCRayHit *>(rays.data()), rays.size(), sizeof(EmbreeRayHit));
     }
 
-    void trace_any(std::span<Ray> rays, bool coherent) const noexcept {
-        rtcOccluded1M(_scene, _trace_context(coherent), reinterpret_cast<RTCRay *>(rays.data()), rays.size(), sizeof(Ray));
+    void trace_any(std::span<EmbreeRay> rays, bool coherent) const noexcept {
+        rtcOccluded1M(_scene, _trace_context(coherent), reinterpret_cast<RTCRay *>(rays.data()), rays.size(), sizeof(EmbreeRay));
     }
 };
 
@@ -164,10 +164,10 @@ Mesh::~Mesh() noexcept = default;
 std::span<const glm::vec3> Mesh::vertices() const noexcept { return _accel->vertices(); }
 std::span<const glm::uvec3> Mesh::indices() const noexcept { return _accel->indices(); }
 
-void Mesh::trace_closest(RayHit *ray) const noexcept { _accel->trace_closest(*ray); }
-void Mesh::trace_any(Ray *ray) const noexcept { _accel->trace_any(*ray); }
-void Mesh::trace_closest(std::span<RayHit> rays, bool coherent) const noexcept { _accel->trace_closest(rays, coherent); }
-void Mesh::trace_any(std::span<Ray> rays, bool coherent) const noexcept { _accel->trace_any(rays, coherent); }
+void Mesh::trace_closest(EmbreeRayHit *ray) const noexcept { _accel->trace_closest(*ray); }
+void Mesh::trace_any(EmbreeRay *ray) const noexcept { _accel->trace_any(*ray); }
+void Mesh::trace_closest(std::span<EmbreeRayHit> rays, bool coherent) const noexcept { _accel->trace_closest(rays, coherent); }
+void Mesh::trace_any(std::span<EmbreeRay> rays, bool coherent) const noexcept { _accel->trace_any(rays, coherent); }
 
 std::unique_ptr<Mesh> Mesh::build(std::span<const glm::vec3> vertices, std::span<const glm::uvec3> indices) noexcept {
     return std::unique_ptr<Mesh>{new Mesh{Accel::build(vertices, indices)}};

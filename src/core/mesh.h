@@ -24,8 +24,8 @@ public:
     [[nodiscard]] static std::unique_ptr<Mesh> build(std::span<const glm::vec3> vertices, std::span<const glm::uvec3> indices) noexcept;
     [[nodiscard]] std::span<const glm::vec3> vertices() const noexcept;
     [[nodiscard]] std::span<const glm::uvec3> indices() const noexcept;
-    void trace_closest(RayHit *ray) const noexcept;
-    void trace_any(Ray *ray) const noexcept;
-    void trace_closest(std::span<RayHit> rays, bool coherent = true) const noexcept;
-    void trace_any(std::span<Ray> rays, bool coherent = true) const noexcept;
+    void trace_closest(EmbreeRayHit *ray) const noexcept;
+    void trace_any(EmbreeRay *ray) const noexcept;
+    void trace_closest(std::span<EmbreeRayHit> rays, bool coherent = true) const noexcept;
+    void trace_any(std::span<EmbreeRay> rays, bool coherent = true) const noexcept;
 };
