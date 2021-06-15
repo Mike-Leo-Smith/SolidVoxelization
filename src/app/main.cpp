@@ -32,9 +32,6 @@ int main(int argc, char *argv[]) {
 
     static constexpr auto resolution = 512;
 
-    std::vector<EmbreeRayHit> rays;
-    rays.resize(resolution * resolution);
-
     static constexpr auto rand = [] {
         static thread_local std::mt19937 random{std::random_device{}()};
         return std::uniform_real_distribution<float>{0.0f, 1.0f}(random);
@@ -116,43 +113,30 @@ int main(int argc, char *argv[]) {
             stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
                 auto x = xy.x;
                 auto y = xy.y;
-                auto index = y * resolution + x;
-                auto &&r = rays[index];
                 auto dx = rand();
                 auto dy = rand();
-                r.ray.o = glm::vec3{world_to_object * glm::vec4{ray_origin, 1.0f}};
-                r.ray.t_min = 0.0f;
-                r.ray.t_max = std::numeric_limits<float>::infinity();
-                r.ray.d = glm::normalize(glm::mat3{world_to_object} * camera.direction(glm::vec2{xy} + glm::vec2{dx, dy}));
-                r.hit.geom_id = EmbreeHit::invalid;
-            });
-
-            stream.dispatch_2d(glm::uvec2{resolution}, [mesh = volume->mesh(), &rays](glm::uvec2 tid) noexcept {
-                auto index = tid.y * resolution + tid.x;
-                mesh->trace_closest(&rays[index]);
-            });
-
-            stream.dispatch_1d(resolution * resolution, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](uint32_t tid) {
-                auto hit = rays[tid].hit;
-                auto radiance = [&] {
-                    if (hit.geom_id == EmbreeHit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
+                Ray ray{};
+                ray.o = glm::vec3{world_to_object * glm::vec4{ray_origin, 1.0f}};
+                ray.t_min = 0.0f;
+                ray.d = glm::normalize(glm::mat3{world_to_object} * camera.direction(glm::vec2{xy} + glm::vec2{dx, dy}));
+                ray.t_max = std::numeric_limits<float>::infinity();
+                auto hit = volume->trace_closest(ray);
+                auto radiance = [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()] {
+                    if (!hit.valid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                     auto ng = glm::normalize(glm::mat3{object_to_world} * hit.ng);
-                    auto tri = ib[hit.prim_id];
-                    auto p0 = vb[tri.x];
-                    auto p1 = vb[tri.y];
-                    auto p2 = vb[tri.z];
-                    auto p = glm::vec3{object_to_world * glm::vec4{(1.0f - hit.uv.x - hit.uv.y) * p0 + hit.uv.x * p1 + hit.uv.y * p2, 1.0f}};
+                    auto p = glm::vec3{object_to_world * glm::vec4{hit.p, 1.0f}};
                     auto L = light_position - p;
                     auto inv_dd = 1.0f / glm::dot(L, L);
                     L = glm::normalize(L);
-                    Ray ray{p + 1e-4f * ng, 0.0f, L, std::numeric_limits<float>::max()};
-                    auto occluded = volume->trace_any(ray);
+                    Ray shadow_ray{p + 1e-4f * ng, 0.0f, L, std::numeric_limits<float>::max()};
+                    auto occluded = volume->trace_any(shadow_ray);
                     auto radiance = occluded
                                         ? glm::vec3{}
                                         : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd * albedo;
                     return radiance + 0.003f * albedo;
                 }();
-                auto &&accum = volume_accum_buffer[tid];
+                auto index = y * resolution + x;
+                auto &&accum = volume_accum_buffer[index];
                 auto t = 1.0f / static_cast<float>(framerate.count() + 1u);
                 accum = glm::mix(accum, radiance, t);
             });
