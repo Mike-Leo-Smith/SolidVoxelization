@@ -8,13 +8,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 11)
 
 project(SolidVoxelization LANGUAGES C CXX)
 
-if (MSVC)
-    list(APPEND CMAKE_C_FLAGS "/arch:AVX2")
-    list(APPEND CMAKE_CXX_FLAGS "/arch:AVX2")
-else ()
-    list(APPEND CMAKE_C_FLAGS "-march=native")
-    list(APPEND CMAKE_CXX_FLAGS "-march=native")
-endif ()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(OpenGL_GL_PREFERENCE GLVND CACHE STRING "" FORCE)
 
