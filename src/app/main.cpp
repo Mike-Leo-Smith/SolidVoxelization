@@ -68,25 +68,16 @@ int main(int argc, char *argv[]) {
         stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
             auto x = xy.x;
             auto y = xy.y;
-            auto index = y * resolution + x;
-            auto &&r = rays[index];
             auto dx = rand();
             auto dy = rand();
+            EmbreeRayHit r{};
             r.ray.o = ray_origin;
             r.ray.t_min = 0.0f;
             r.ray.t_max = std::numeric_limits<float>::infinity();
             r.ray.d = camera.direction(glm::vec2{xy} + glm::vec2{dx, dy});
             r.hit.geom_id = EmbreeHit::invalid;
-        });
-
-        stream.dispatch_2d(glm::uvec2{resolution}, [&mesh, &rays](glm::uvec2 tid) noexcept {
-            auto index = tid.y * resolution + tid.x;
-            mesh->trace_closest(&rays[index]);
-        });
-
-        stream.dispatch_1d(resolution * resolution, [&, vb = mesh->vertices(), ib = mesh->indices()](uint32_t tid) {
-            auto hit = rays[tid].hit;
-            auto radiance = [&] {
+            mesh->trace_closest(&r);
+            auto radiance = [&, hit = r.hit, vb = mesh->vertices(), ib = mesh->indices()] {
                 if (hit.geom_id == EmbreeHit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                 auto ng = normalize(hit.ng);
                 auto tri = ib[hit.prim_id];
@@ -108,7 +99,8 @@ int main(int argc, char *argv[]) {
                                     : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd * albedo;
                 return radiance + 0.003f * albedo;
             }();
-            auto &&accum = mesh_accum_buffer[tid];
+            auto index = y * resolution + x;
+            auto &&accum = mesh_accum_buffer[index];
             auto t = 1.0f / static_cast<float>(framerate.count() + 1u);
             accum = glm::mix(accum, radiance, t);
         });
@@ -121,10 +113,11 @@ int main(int argc, char *argv[]) {
 
         // render volume
         if (volume != nullptr) {
-            stream.dispatch_2d({resolution, resolution}, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](glm::uvec2 xy) noexcept {
+            stream.dispatch_2d({resolution, resolution}, [&](glm::uvec2 xy) noexcept {
                 auto x = xy.x;
                 auto y = xy.y;
-                EmbreeRayHit r{};
+                auto index = y * resolution + x;
+                auto &&r = rays[index];
                 auto dx = rand();
                 auto dy = rand();
                 r.ray.o = glm::vec3{world_to_object * glm::vec4{ray_origin, 1.0f}};
@@ -132,8 +125,15 @@ int main(int argc, char *argv[]) {
                 r.ray.t_max = std::numeric_limits<float>::infinity();
                 r.ray.d = glm::normalize(glm::mat3{world_to_object} * camera.direction(glm::vec2{xy} + glm::vec2{dx, dy}));
                 r.hit.geom_id = EmbreeHit::invalid;
-                mesh->trace_closest(&r);
-                auto hit = r.hit;
+            });
+
+            stream.dispatch_2d(glm::uvec2{resolution}, [mesh = volume->mesh(), &rays](glm::uvec2 tid) noexcept {
+                auto index = tid.y * resolution + tid.x;
+                mesh->trace_closest(&rays[index]);
+            });
+
+            stream.dispatch_1d(resolution * resolution, [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()](uint32_t tid) {
+                auto hit = rays[tid].hit;
                 auto radiance = [&] {
                     if (hit.geom_id == EmbreeHit::invalid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                     auto ng = glm::normalize(glm::mat3{object_to_world} * hit.ng);
@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
                                         : glm::max(glm::dot(L, ng), 0.0f) * light_emission * inv_dd * albedo;
                     return radiance + 0.003f * albedo;
                 }();
-                auto &&accum = volume_accum_buffer[y * resolution + x];
+                auto &&accum = volume_accum_buffer[tid];
                 auto t = 1.0f / static_cast<float>(framerate.count() + 1u);
                 accum = glm::mix(accum, radiance, t);
             });
