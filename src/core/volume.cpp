@@ -198,29 +198,147 @@ private:
         };
 
         auto node = _nodes[node_index];
-        if (node.empty()) { return; }
         if (node.full()) { return add_cube(origin, res); }
 
         // leaf
-        if (auto half_res = res / 2u; half_res == 1) {
+        if (res == 2u) {
             for (auto i = 0u; i < 8u; i++) {
-                if (node.child_masks() & Node::m[i]) { add_cube(origin + Node::d[i] * half_res, half_res); }
+                if (node.child_masks() & Node::m[i]) { add_cube(origin + Node::d[i], 1u); }
             }
-        } else {// inner nodes
-            for (auto i = 0u; i < 8u; i++) {
-                if (node.child_masks() & Node::m[i]) {
-                    _to_mesh(node_index + node.child_offset() + i, vertices, indices, origin + Node::d[i] * half_res, half_res);
-                }
+            return;
+        }
+        // inner nodes
+        auto half_res = res / 2u;
+        for (auto i = 0u; i < 8u; i++) {
+            if (node.child_masks() & Node::m[i]) {
+                _to_mesh(node_index + node.child_offset() + i, vertices, indices, origin + Node::d[i] * half_res, half_res);
             }
         }
     }
 
-    [[nodiscard]] static auto _inside(glm::uvec3 origin, uint32_t res, glm::vec3 p) noexcept {
-        return glm::all(glm::greaterThanEqual(p, glm::vec3{origin}))
-               && glm::all(glm::lessThanEqual(p, glm::vec3{origin + res}));
+    [[nodiscard]] static auto _inside(glm::vec3 bbox_origin, float res, glm::vec3 p) noexcept {
+        return glm::all(glm::greaterThanEqual(p, bbox_origin))
+               && glm::all(glm::lessThanEqual(p, bbox_origin + res));
     }
 
-    [[nodiscard]] auto _trace_any(glm::vec3 origin, glm::vec3 direction, float t_max) const noexcept {
+    [[nodiscard]] static auto _intersect_box(Ray ray, glm::vec3 bbox_min, float bbox_r) noexcept {
+        auto bbox_max = bbox_min + bbox_r;
+        auto t_min = (bbox_min - ray.o) / ray.d;
+        auto t_max = (bbox_max - ray.o) / ray.d;
+        auto o_mat = glm::mat3{ray.o, ray.o, ray.o};
+        std::array p_min = {ray.o + t_min.x * ray.d, ray.o + t_min.y * ray.d, ray.o + t_min.z * ray.d};
+        std::array p_max = {ray.o + t_max.x * ray.d, ray.o + t_max.y * ray.d, ray.o + t_max.z * ray.d};
+        auto valid = [ray, bbox_min, bbox_max](auto t, auto p) noexcept {
+            return glm::not_(glm::isnan(t))
+                   && glm::greaterThanEqual(t, glm::vec3{ray.t_min})
+                   && glm::lessThanEqual(t, glm::vec3{ray.t_max})
+                   && glm::bvec3{p[0].y >= bbox_min.y && p[0].y <= bbox_max.y
+                                     && p[0].z >= bbox_min.z && p[0].z <= bbox_max.z,
+                                 p[1].z >= bbox_min.z && p[1].z <= bbox_max.z
+                                     && p[1].x >= bbox_min.x && p[1].x <= bbox_max.x,
+                                 p[2].x >= bbox_min.x && p[2].x <= bbox_max.x
+                                     && p[2].y >= bbox_min.y && p[2].y <= bbox_max.y};
+        };
+        auto t_invalid = glm::vec3{std::numeric_limits<float>::infinity()};
+        auto valid_min = valid(t_min, p_min);
+        auto valid_max = valid(t_max, p_max);
+        t_min = glm::mix(t_invalid, t_min, valid_min);
+        t_max = glm::mix(t_invalid, t_max, valid_max);
+        auto t = glm::min(t_min, t_max);
+        auto is_min = glm::lessThanEqual(t_min, t_max);
+        Hit hit{};
+        hit.t = std::numeric_limits<float>::infinity();
+        hit.valid = false;
+        if (t.x < hit.t) {
+            hit.p = is_min.x ? p_min[0] : p_max[0];
+            hit.t = t.x;
+            hit.ng = {is_min.x ? -1.0f : 1.0f, 0.0f, 0.0f};
+            hit.valid = valid_min.x || valid_max.x;
+        }
+        if (t.y < hit.t) {
+            hit.p = is_min.y ? p_min[1] : p_max[1];
+            hit.t = t.y;
+            hit.ng = {0.0f, is_min.y ? -1.0f : 1.0f, 0.0f};
+            hit.valid = valid_min.y || valid_max.y;
+        }
+        if (t.z < hit.t) {
+            hit.p = is_min.z ? p_min[2] : p_max[2];
+            hit.t = t.z;
+            hit.ng = {0.0f, 0.0f, is_min.z ? -1.0f : 1.0f};
+            hit.valid = valid_min.z || valid_max.z;
+        }
+        return hit;
+    }
+
+    void _trace_closest(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, Ray ray, Hit &closest) const noexcept {
+
+        auto hit = _intersect_box(ray, bbox_origin, bbox_r);
+
+        // not intersecting the entire box, or
+        // the min possible t is greater than known min
+        if (!hit.valid || hit.t >= closest.t) { return; }
+
+        auto node = _nodes[node_index];
+
+        // intersecting the full box, update the closest hit
+        if (node.full()) {
+            closest = hit;
+            return;
+        }
+
+        // leaf
+        if (bbox_r == 2.0f) {
+            for (auto i = 0u; i < 8u; i++) {
+                if ((node.child_masks() & Node::m[i])) {
+                    if (auto child_hit = _intersect_box(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f);
+                        child_hit.valid && child_hit.t < closest.t) { closest = child_hit; }
+                }
+            }
+            return;
+        }
+        
+        // inner node
+        auto half_r = bbox_r * 0.5f;
+        for (auto i = 0u; i < 8u; i++) {
+            if (node.child_masks() & Node::m[i]) {
+                _trace_closest(node_index + node.child_offset() + i, bbox_origin + glm::vec3{Node::d[i]} * half_r, half_r, ray, closest);
+            }
+        }
+    }
+
+    [[nodiscard]] auto _trace_any(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, Ray ray) const noexcept {
+
+        auto hit = _intersect_box(ray, bbox_origin, bbox_r);
+
+        // not intersecting the entire box
+        if (!hit.valid) { return false; }
+
+        auto node = _nodes[node_index];
+
+        // intersecting the full box
+        if (node.full()) { return true; }
+
+        // leaf
+        if (bbox_r == 2.0f) {
+            for (auto i = 0u; i < 8u; i++) {
+                if ((node.child_masks() & Node::m[i])
+                    && _intersect_box(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f).valid) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // inner node
+        auto half_r = 0.5f * bbox_r;
+        for (auto i = 0u; i < 8u; i++) {
+            if ((node.child_masks() & Node::m[i])
+                && _trace_any(node_index + node.child_offset() + i,
+                              bbox_origin + glm::vec3{Node::d[i]} * half_r, half_r, ray)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 public:
@@ -231,22 +349,36 @@ public:
         auto t0 = std::chrono::high_resolution_clock::now();
         static_cast<void>(tree->_build(root, segments, glm::uvec3{}, resolution));
         auto t1 = std::chrono::high_resolution_clock::now();
+        auto fill_count = std::count_if(tree->_nodes.cbegin(), tree->_nodes.cend(), [](auto n) noexcept { return !n.empty(); });
         using namespace std::chrono_literals;
-        std::cout << "Build octree with " << tree->_nodes.size() << " nodes in " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
+        std::cout << "Build octree with " << tree->_nodes.size() << " nodes "
+                  << "(" << static_cast<double>(fill_count) / static_cast<double>(tree->_nodes.size()) * 100.0 << "% filled) "
+                  << "in " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
         return tree;
     }
 
     [[nodiscard]] auto to_mesh() const noexcept {
         std::vector<glm::vec3> vertices;
         std::vector<glm::uvec3> indices;
-        _to_mesh(0u, vertices, indices, glm::uvec3{}, _resolution);
+        if (auto root = _nodes.front(); !root.empty()) {
+            _to_mesh(0u, vertices, indices, glm::uvec3{}, _resolution);
+        }
         return Mesh::build(vertices, indices);
     }
 
-    [[nodiscard]] auto trace_closest(EmbreeRayHit *ray) const noexcept {
+    [[nodiscard]] Hit trace_closest(Ray ray) const noexcept {
+        Hit hit{};
+        hit.t = std::numeric_limits<float>::infinity();
+        hit.valid = false;
+        if (auto root = _nodes.front(); !root.empty()) {
+            _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
+        }
+        return hit;
     }
 
-    void trace_any(EmbreeRay &ray) const noexcept {
+    [[nodiscard]] auto trace_any(Ray ray) const noexcept {
+        if (auto root = _nodes.front(); root.empty()) { return false; }
+        return _trace_any(0u, glm::vec3{}, static_cast<float>(_resolution), ray);
     }
 };
 
@@ -296,14 +428,14 @@ public:
                             mesh.trace_closest(&ray_hit);
                             // ray exits the scene
                             if (ray_hit.hit.geom_id == EmbreeHit::invalid) {
-                                                                if (counter > 0) {// bad case, add surface hit & exit
-                                                                    auto z = glm::clamp((1.5f - t_start * 0.5f) * res_f - 0.5f, 0.0f, res_f - 1.0f);
-                                                                    Segment segment{static_cast<uint16_t>(x),
-                                                                                    static_cast<uint16_t>(y),
-                                                                                    static_cast<uint16_t>(z),
-                                                                                    static_cast<uint16_t>(z)};
-                                                                    segment_cache.emplace_back(segment);
-                                                                }
+                                if (counter > 0) {// bad case, add surface hit & exit
+                                    auto z = glm::clamp((1.5f - t_start * 0.5f) * res_f - 0.5f, 0.0f, res_f - 1.0f);
+                                    Segment segment{static_cast<uint16_t>(x),
+                                                    static_cast<uint16_t>(y),
+                                                    static_cast<uint16_t>(z),
+                                                    static_cast<uint16_t>(z)};
+                                    segment_cache.emplace_back(segment);
+                                }
                                 break;
                             }
                             // process the segment
@@ -362,5 +494,8 @@ std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::m
 
 Volume::Volume(std::unique_ptr<Octree> octree, size_t resolution) noexcept
     : _octree{std::move(octree)}, _resolution{resolution} {}
+
+bool Volume::trace_any(Ray ray) const noexcept { return _octree->trace_any(ray); }
+Hit Volume::trace_closest(Ray ray) const noexcept { return _octree->trace_closest(ray); }
 
 Volume::~Volume() noexcept = default;

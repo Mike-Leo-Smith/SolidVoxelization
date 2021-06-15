@@ -25,6 +25,8 @@ public:
         const Mesh &mesh, size_t resolution,
         glm::mat4 camera_to_world = glm::identity<glm::mat4>()) noexcept;
     [[nodiscard]] auto resolution() const noexcept { return _resolution; }
+    [[nodiscard]] bool trace_any(Ray ray) const noexcept;
+    [[nodiscard]] Hit trace_closest(Ray ray) const noexcept;
     
     // TODO: temp hack...
     [[nodiscard]] auto mesh() const noexcept { return _mesh.get(); }

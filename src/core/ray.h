@@ -45,5 +45,5 @@ struct alignas(16) Hit {
     glm::vec3 p;
     float t;
     glm::vec3 ng;
-    uint32_t front;
+    int valid;
 };

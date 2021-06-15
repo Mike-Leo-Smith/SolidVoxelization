@@ -35,7 +35,7 @@ private:
             RTC_FORMAT_FLOAT3, sizeof(glm::vec3), vertices.size()));
         std::copy_n(vertices.data(), vertices.size(), vb);
         _vertices = {vb, vertices.size()};
-
+        
         auto ib = static_cast<glm::uvec3 *>(rtcSetNewGeometryBuffer(
             geometry, RTC_BUFFER_TYPE_INDEX, 0,
             RTC_FORMAT_UINT3, sizeof(glm::uvec3), indices.size()));
