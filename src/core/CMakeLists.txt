@@ -10,6 +10,3 @@ add_library(sv-core STATIC
             camera.cpp camera.h
             framerate.cpp framerate.h)
 target_link_libraries(sv-core PUBLIC sv-ext)
-
-add_executable(octree octree.cpp)
-target_link_libraries(sv-core PUBLIC sv-ext)

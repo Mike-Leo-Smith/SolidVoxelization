@@ -4,14 +4,14 @@
 
 #include <array>
 #include <bitset>
+#include <core/volume.h>
 #include <fstream>
+#include <glm/gtx/component_wise.hpp>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <thread>
 #include <vector>
-
-#include <core/volume.h>
 
 [[nodiscard]] inline auto is_power_of_two(uint64_t x) noexcept {
     return x != 0u && (x & (x - 1u)) == 0u;
@@ -221,6 +221,41 @@ private:
                && glm::all(glm::lessThanEqual(p, bbox_origin + res));
     }
 
+    [[nodiscard]] static auto _intersect_box_akari(Ray ray, glm::vec3 p1, float r) {
+        auto p2 = p1 + r;
+        auto t0 = (p1 - ray.o) / ray.d;
+        auto t1 = (p2 - ray.o) / ray.d;
+        auto tmin = min(t0, t1);
+        auto tmax = max(t0, t1);
+        float t = glm::compMax(tmin);
+        Hit hit{};
+        hit.t = std::numeric_limits<float>::max();
+        hit.valid = false;
+        auto fleq = [](auto lhs, auto rhs) noexcept { return std::abs(lhs - rhs) < 1e-5f; };
+        if (t < compMin(tmax)) {
+            t = glm::max(t, 0.0f);
+            if (t > glm::compMin(tmax)) { return hit; }
+            auto p = ray.o + t * ray.d;
+            if (fleq(p1.x, p.x)) {
+                hit.ng = {-1.0f, 0.0f, 0.0f};
+            } else if (fleq(p2.x, p.x)) {
+                hit.ng = {1.0f, 0.0f, 0.0f};
+            } else if (fleq(p1.y, p.y)) {
+                hit.ng = {0.0f, -1.0f, 0.0f};
+            } else if (fleq(p2.y, p.y)) {
+                hit.ng = {0.0f, 1.0f, 0.0f};
+            } else if (fleq(p1.z, p.z)) {
+                hit.ng = {0.0f, 0.0f, -1.0f};
+            } else {
+                hit.ng = {0.0f, 0.0f, 1.0f};
+            }
+            hit.t = t;
+            hit.p = p;
+            hit.valid = true;
+        }
+        return hit;
+    }
+
     [[nodiscard]] static auto _intersect_box(const Ray &ray, const glm::vec3 &bbox_min, float bbox_r) noexcept {
         auto bbox_max = bbox_min + bbox_r;
         auto t_min = (bbox_min - ray.o) / ray.d;
@@ -285,16 +320,16 @@ private:
 
         Hit closest{.t = std::numeric_limits<float>::max(), .valid = false};
         if (_nodes.front().empty()) { return closest; }
-        
+
         auto add_node = [&sp, ray, &closest, this](auto index, auto o, auto r) noexcept {
-            if (auto hit = _intersect_box(ray, o, r); hit.valid && hit.t < closest.t) {
+            if (auto hit = _intersect_box_akari(ray, o, r); hit.valid && hit.t < closest.t) {
                 auto node = _nodes[index];
                 if (node.full()) {
                     closest = hit;
                 } else if (r == 2.0f) {
                     for (auto i = 0u; i < 8u; i++) {
                         if ((node.child_masks() & Node::m[i])) {
-                            if (auto child_hit = _intersect_box(ray, o + glm::vec3{Node::d[i]}, 1.0f);
+                            if (auto child_hit = _intersect_box_akari(ray, o + glm::vec3{Node::d[i]}, 1.0f);
                                 child_hit.valid && child_hit.t < closest.t) {
                                 closest = child_hit;
                             }
@@ -312,7 +347,6 @@ private:
             if (ctx.t >= closest.t) { continue; }
             auto node = _nodes[ctx.index];
             auto half_r = ctx.r * 0.5f;
-            auto s_begin = sp;
             for (auto i = 0u; i < 8u; i++) {
                 if (node.child_masks() & Node::m[i]) {
                     add_node(ctx.index + node.child_offset() + i, ctx.o + glm::vec3{Node::d[i]} * half_r, half_r);
@@ -325,7 +359,7 @@ private:
     void _trace_closest(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, Ray ray, Hit &closest) const noexcept {
 
         ray.t_max = closest.t;
-        auto hit = _intersect_box(ray, bbox_origin, bbox_r);
+        auto hit = _intersect_box_akari(ray, bbox_origin, bbox_r);
 
         // not intersecting the entire box, or
         // the min possible t is greater than known min
@@ -344,7 +378,7 @@ private:
 #pragma unroll
             for (auto i = 0u; i < 8u; i++) {
                 if ((node.child_masks() & Node::m[i])) {
-                    if (auto child_hit = _intersect_box(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f);
+                    if (auto child_hit = _intersect_box_akari(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f);
                         child_hit.valid && child_hit.t < closest.t) { closest = child_hit; }
                 }
             }
@@ -378,7 +412,7 @@ private:
 #pragma unroll
             for (auto i = 0u; i < 8u; i++) {
                 if ((node.child_masks() & Node::m[i])
-                    && _intersect_box(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f).valid) {
+                    && _intersect_box_akari(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f).valid) {
                     return true;
                 }
             }
@@ -425,13 +459,13 @@ public:
 
     [[nodiscard]] Hit trace_closest(Ray ray) const noexcept {
         return _trace_closest(ray);
-//                Hit hit{};
-//                hit.t = std::numeric_limits<float>::infinity();
-//                hit.valid = false;
-//                if (auto root = _nodes.front(); !root.empty()) {
-//                    _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
-//                }
-//                return hit;
+//                        Hit hit{};
+//                        hit.t = std::numeric_limits<float>::infinity();
+//                        hit.valid = false;
+//                        if (auto root = _nodes.front(); !root.empty()) {
+//                            _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
+//                        }
+//                        return hit;
     }
 
     [[nodiscard]] auto trace_any(Ray ray) const noexcept {
