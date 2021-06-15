@@ -239,7 +239,7 @@ private:
                                  p[2].x >= bbox_min.x && p[2].x <= bbox_max.x
                                      && p[2].y >= bbox_min.y && p[2].y <= bbox_max.y};
         };
-        auto t_invalid = glm::vec3{std::numeric_limits<float>::infinity()};
+        auto t_invalid = glm::vec3{std::numeric_limits<float>::max()};
         auto valid_min = valid(t_min, p_min);
         auto valid_max = valid(t_max, p_max);
         t_min = glm::mix(t_invalid, t_min, valid_min);
@@ -247,7 +247,7 @@ private:
         auto t = glm::min(t_min, t_max);
         auto is_min = glm::lessThanEqual(t_min, t_max);
         Hit hit{};
-        hit.t = std::numeric_limits<float>::infinity();
+        hit.t = std::numeric_limits<float>::max();
         hit.valid = false;
         if (t.x < hit.t) {
             hit.p = is_min.x ? p_min[0] : p_max[0];
@@ -270,8 +270,61 @@ private:
         return hit;
     }
 
-    void _trace_closest(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, const Ray &ray, Hit &closest) const noexcept {
+    [[nodiscard]] auto _trace_closest(Ray ray) const noexcept {
 
+        struct alignas(16) TraceContext {
+            glm::vec3 o;
+            float r;
+            uint32_t index;
+            float t;
+        };
+
+        static constexpr auto stack_size = 64u;
+        static thread_local std::array<TraceContext, stack_size> stack{};
+        auto sp = 0u;
+
+        Hit closest{.t = std::numeric_limits<float>::max(), .valid = false};
+        if (_nodes.front().empty()) { return closest; }
+        
+        auto add_node = [&sp, ray, &closest, this](auto index, auto o, auto r) noexcept {
+            if (auto hit = _intersect_box(ray, o, r); hit.valid && hit.t < closest.t) {
+                auto node = _nodes[index];
+                if (node.full()) {
+                    closest = hit;
+                } else if (r == 2.0f) {
+                    for (auto i = 0u; i < 8u; i++) {
+                        if ((node.child_masks() & Node::m[i])) {
+                            if (auto child_hit = _intersect_box(ray, o + glm::vec3{Node::d[i]}, 1.0f);
+                                child_hit.valid && child_hit.t < closest.t) {
+                                closest = child_hit;
+                            }
+                        }
+                    }
+                } else {
+                    stack[sp++] = {o, r, index, hit.t};
+                }
+            }
+        };
+
+        add_node(0u, glm::vec3{}, static_cast<float>(_resolution));
+        while (sp != 0u) {
+            auto ctx = stack[--sp];
+            if (ctx.t >= closest.t) { continue; }
+            auto node = _nodes[ctx.index];
+            auto half_r = ctx.r * 0.5f;
+            auto s_begin = sp;
+            for (auto i = 0u; i < 8u; i++) {
+                if (node.child_masks() & Node::m[i]) {
+                    add_node(ctx.index + node.child_offset() + i, ctx.o + glm::vec3{Node::d[i]} * half_r, half_r);
+                }
+            }
+        }
+        return closest;
+    }
+
+    void _trace_closest(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, Ray ray, Hit &closest) const noexcept {
+
+        ray.t_max = closest.t;
         auto hit = _intersect_box(ray, bbox_origin, bbox_r);
 
         // not intersecting the entire box, or
@@ -297,7 +350,7 @@ private:
             }
             return;
         }
-        
+
         // inner node
         auto half_r = bbox_r * 0.5f;
 #pragma unroll
@@ -331,7 +384,7 @@ private:
             }
             return false;
         }
-        
+
         // inner node
         auto half_r = 0.5f * bbox_r;
 #pragma unroll
@@ -371,13 +424,14 @@ public:
     }
 
     [[nodiscard]] Hit trace_closest(Ray ray) const noexcept {
-        Hit hit{};
-        hit.t = std::numeric_limits<float>::infinity();
-        hit.valid = false;
-        if (auto root = _nodes.front(); !root.empty()) {
-            _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
-        }
-        return hit;
+        return _trace_closest(ray);
+//                Hit hit{};
+//                hit.t = std::numeric_limits<float>::infinity();
+//                hit.valid = false;
+//                if (auto root = _nodes.front(); !root.empty()) {
+//                    _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
+//                }
+//                return hit;
     }
 
     [[nodiscard]] auto trace_any(Ray ray) const noexcept {
