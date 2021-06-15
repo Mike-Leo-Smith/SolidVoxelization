@@ -221,7 +221,7 @@ private:
                && glm::all(glm::lessThanEqual(p, bbox_origin + res));
     }
 
-    [[nodiscard]] static auto _intersect_box(Ray ray, glm::vec3 bbox_min, float bbox_r) noexcept {
+    [[nodiscard]] static auto _intersect_box(const Ray &ray, const glm::vec3 &bbox_min, float bbox_r) noexcept {
         auto bbox_max = bbox_min + bbox_r;
         auto t_min = (bbox_min - ray.o) / ray.d;
         auto t_max = (bbox_max - ray.o) / ray.d;
@@ -270,7 +270,7 @@ private:
         return hit;
     }
 
-    void _trace_closest(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, Ray ray, Hit &closest) const noexcept {
+    void _trace_closest(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, const Ray &ray, Hit &closest) const noexcept {
 
         auto hit = _intersect_box(ray, bbox_origin, bbox_r);
 
@@ -288,6 +288,7 @@ private:
 
         // leaf
         if (bbox_r == 2.0f) {
+#pragma unroll
             for (auto i = 0u; i < 8u; i++) {
                 if ((node.child_masks() & Node::m[i])) {
                     if (auto child_hit = _intersect_box(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f);
@@ -299,6 +300,7 @@ private:
         
         // inner node
         auto half_r = bbox_r * 0.5f;
+#pragma unroll
         for (auto i = 0u; i < 8u; i++) {
             if (node.child_masks() & Node::m[i]) {
                 _trace_closest(node_index + node.child_offset() + i, bbox_origin + glm::vec3{Node::d[i]} * half_r, half_r, ray, closest);
@@ -320,6 +322,7 @@ private:
 
         // leaf
         if (bbox_r == 2.0f) {
+#pragma unroll
             for (auto i = 0u; i < 8u; i++) {
                 if ((node.child_masks() & Node::m[i])
                     && _intersect_box(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f).valid) {
@@ -331,6 +334,7 @@ private:
         
         // inner node
         auto half_r = 0.5f * bbox_r;
+#pragma unroll
         for (auto i = 0u; i < 8u; i++) {
             if ((node.child_masks() & Node::m[i])
                 && _trace_any(node_index + node.child_offset() + i,
