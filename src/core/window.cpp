@@ -32,7 +32,7 @@ Window::Window(const char *title, uint32_t width, uint32_t height) noexcept {
         exit(-1);
     }
     glfwMakeContextCurrent(_handle);
-    glfwSwapInterval(1);
+    glfwSwapInterval(0);
 
     if (gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)) == 0) {
         std::cerr << "Failed to initialize OpenGL loader" << std::endl;

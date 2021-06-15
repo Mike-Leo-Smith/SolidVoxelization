@@ -296,14 +296,14 @@ public:
                             mesh.trace_closest(&ray_hit);
                             // ray exits the scene
                             if (ray_hit.hit.geom_id == EmbreeHit::invalid) {
-                                //                                if (counter > 0) {// bad case, add surface hit & exit
-                                //                                    auto z = glm::clamp((1.5f - t_start * 0.5f) * res_f - 0.5f, 0.0f, res_f - 1.0f);
-                                //                                    Segment segment{static_cast<uint16_t>(x),
-                                //                                                    static_cast<uint16_t>(y),
-                                //                                                    static_cast<uint16_t>(z),
-                                //                                                    static_cast<uint16_t>(z)};
-                                //                                    segment_cache.emplace_back(segment);
-                                //                                }
+                                                                if (counter > 0) {// bad case, add surface hit & exit
+                                                                    auto z = glm::clamp((1.5f - t_start * 0.5f) * res_f - 0.5f, 0.0f, res_f - 1.0f);
+                                                                    Segment segment{static_cast<uint16_t>(x),
+                                                                                    static_cast<uint16_t>(y),
+                                                                                    static_cast<uint16_t>(z),
+                                                                                    static_cast<uint16_t>(z)};
+                                                                    segment_cache.emplace_back(segment);
+                                                                }
                                 break;
                             }
                             // process the segment
@@ -320,12 +320,12 @@ public:
                                         segment_cache.emplace_back(segment);
                                     }
                                 } else if (counter < 0) {// bad case, add surface voxel & reset
-                                                         //                                    auto z = glm::clamp((1.5f - ray_hit.ray.t_max * 0.5f) * res_f + 0.5f, 0.0f, res_f - 1.0f);
-                                                         //                                    Segment segment{static_cast<uint16_t>(x),
-                                                         //                                                    static_cast<uint16_t>(y),
-                                                         //                                                    static_cast<uint16_t>(z),
-                                                         //                                                    static_cast<uint16_t>(z)};
-                                                         //                                    segment_cache.emplace_back(segment);
+                                    auto z = glm::clamp((1.5f - ray_hit.ray.t_max * 0.5f) * res_f + 0.5f, 0.0f, res_f - 1.0f);
+                                    Segment segment{static_cast<uint16_t>(x),
+                                                    static_cast<uint16_t>(y),
+                                                    static_cast<uint16_t>(z),
+                                                    static_cast<uint16_t>(z)};
+                                    segment_cache.emplace_back(segment);
                                     counter = 0;
                                 }
                             }
