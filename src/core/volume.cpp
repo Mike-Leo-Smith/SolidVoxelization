@@ -18,7 +18,7 @@
 }
 
 void check_resolution(uint32_t resolution) noexcept {
-    if (resolution < 2 || resolution > 1024u || !is_power_of_two(resolution)) {
+    if (resolution < 2 || resolution > 4096u || !is_power_of_two(resolution)) {
         std::cerr << "Invalid volume resolution: " << resolution << "." << std::endl;
         exit(-1);
     }
