@@ -459,19 +459,22 @@ public:
 
     [[nodiscard]] Hit trace_closest(Ray ray) const noexcept {
         return _trace_closest(ray);
-//                        Hit hit{};
-//                        hit.t = std::numeric_limits<float>::infinity();
-//                        hit.valid = false;
-//                        if (auto root = _nodes.front(); !root.empty()) {
-//                            _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
-//                        }
-//                        return hit;
+        //                        Hit hit{};
+        //                        hit.t = std::numeric_limits<float>::infinity();
+        //                        hit.valid = false;
+        //                        if (auto root = _nodes.front(); !root.empty()) {
+        //                            _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
+        //                        }
+        //                        return hit;
     }
 
     [[nodiscard]] auto trace_any(Ray ray) const noexcept {
         if (auto root = _nodes.front(); root.empty()) { return false; }
         return _trace_any(0u, glm::vec3{}, static_cast<float>(_resolution), ray);
     }
+
+    [[nodiscard]] auto nodes() const noexcept { return std::span{_nodes}; }
+
 };
 
 [[nodiscard]] auto compute_segments(const Mesh &mesh, glm::mat4 M, uint32_t res) noexcept {
@@ -591,3 +594,9 @@ bool Volume::trace_any(Ray ray) const noexcept { return _octree->trace_any(ray);
 Hit Volume::trace_closest(Ray ray) const noexcept { return _octree->trace_closest(ray); }
 
 Volume::~Volume() noexcept = default;
+
+#ifdef SV_CUDA_AVAILABLE
+std::unique_ptr<CUDAOctree> Volume::cuda() const noexcept {
+    return CUDAOctree::create(_octree->nodes().data(), _octree->nodes().size(), _resolution);
+}
+#endif

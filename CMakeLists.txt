@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.16...3.20)
-cmake_policy(VERSION 3.16)
+cmake_minimum_required(VERSION 3.18...3.20)
+cmake_policy(VERSION 3.18)
 cmake_policy(SET CMP0072 NEW)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 11)
+set(CMAKE_CUDA_ARCHITECTURES 60)
 
 project(SolidVoxelization LANGUAGES C CXX)
 

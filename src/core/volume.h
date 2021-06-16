@@ -4,8 +4,13 @@
 
 #pragma once
 
+#include <memory>
 #include <core/mesh.h>
 #include <core/segment.h>
+
+#ifdef SV_CUDA_AVAILABLE
+#include <gpu/cuda_octree.h>
+#endif
 
 class Octree;
 
@@ -30,4 +35,9 @@ public:
     
     // TODO: temp hack...
     [[nodiscard]] auto mesh() const noexcept { return _mesh.get(); }
+
+#ifdef SV_CUDA_AVAILABLE
+    [[nodiscard]] std::unique_ptr<CUDAOctree> cuda() const noexcept;
+#endif
+
 };
