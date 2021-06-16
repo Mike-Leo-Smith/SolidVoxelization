@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
                 ray.d = glm::normalize(glm::mat3{world_to_object} * camera.direction(glm::vec2{xy} + glm::vec2{dx, dy}));
                 ray.t_max = std::numeric_limits<float>::infinity();
                 auto hit = volume->trace_closest(ray);
-                auto radiance = [&, vb = volume->mesh()->vertices(), ib = volume->mesh()->indices()] {
+                auto radiance = [&] {
                     if (!hit.valid) { return glm::vec3{0.2f, 0.6f, 1.0f}; }
                     auto ng = glm::normalize(glm::mat3{object_to_world} * hit.ng);
                     auto p = glm::vec3{object_to_world * glm::vec4{hit.p, 1.0f}};

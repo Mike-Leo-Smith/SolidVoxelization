@@ -223,6 +223,8 @@ private:
 
     [[nodiscard]] static auto _intersect_box_akari(Ray ray, glm::vec3 p1, float r) {
         auto p2 = p1 + r;
+        ray.o = ray.o + ray.t_min * ray.d;
+        ray.t_max -= ray.t_min;
         auto t0 = (p1 - ray.o) / ray.d;
         auto t1 = (p2 - ray.o) / ray.d;
         auto tmin = min(t0, t1);
@@ -249,9 +251,9 @@ private:
             } else {
                 hit.ng = {0.0f, 0.0f, 1.0f};
             }
-            hit.t = t;
+            hit.t = t + ray.t_min;
             hit.p = p;
-            hit.valid = true;
+            hit.valid = hit.t <= ray.t_max;
         }
         return hit;
     }
@@ -583,7 +585,7 @@ std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::m
     std::cout << "Found " << segments.size() << " segments in " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
 
     auto volume = std::unique_ptr<Volume>{new Volume{Octree::build(segments, resolution), resolution}};
-    volume->_mesh = volume->_octree->to_mesh();
+//    volume->_mesh = volume->_octree->to_mesh();
     return volume;
 }
 
