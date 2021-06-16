@@ -377,7 +377,6 @@ private:
 
         // leaf
         if (bbox_r == 2.0f) {
-#pragma unroll
             for (auto i = 0u; i < 8u; i++) {
                 if ((node.child_masks() & Node::m[i])) {
                     if (auto child_hit = _intersect_box_akari(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f);
@@ -389,7 +388,6 @@ private:
 
         // inner node
         auto half_r = bbox_r * 0.5f;
-#pragma unroll
         for (auto i = 0u; i < 8u; i++) {
             if (node.child_masks() & Node::m[i]) {
                 _trace_closest(node_index + node.child_offset() + i, bbox_origin + glm::vec3{Node::d[i]} * half_r, half_r, ray, closest);
@@ -399,7 +397,7 @@ private:
 
     [[nodiscard]] auto _trace_any(uint32_t node_index, glm::vec3 bbox_origin, float bbox_r, Ray ray) const noexcept {
 
-        auto hit = _intersect_box(ray, bbox_origin, bbox_r);
+        auto hit = _intersect_box_akari(ray, bbox_origin, bbox_r);
 
         // not intersecting the entire box
         if (!hit.valid) { return false; }
@@ -411,7 +409,6 @@ private:
 
         // leaf
         if (bbox_r == 2.0f) {
-#pragma unroll
             for (auto i = 0u; i < 8u; i++) {
                 if ((node.child_masks() & Node::m[i])
                     && _intersect_box_akari(ray, bbox_origin + glm::vec3{Node::d[i]}, 1.0f).valid) {
@@ -423,7 +420,6 @@ private:
 
         // inner node
         auto half_r = 0.5f * bbox_r;
-#pragma unroll
         for (auto i = 0u; i < 8u; i++) {
             if ((node.child_masks() & Node::m[i])
                 && _trace_any(node_index + node.child_offset() + i,
@@ -461,13 +457,6 @@ public:
 
     [[nodiscard]] Hit trace_closest(Ray ray) const noexcept {
         return _trace_closest(ray);
-        //                        Hit hit{};
-        //                        hit.t = std::numeric_limits<float>::infinity();
-        //                        hit.valid = false;
-        //                        if (auto root = _nodes.front(); !root.empty()) {
-        //                            _trace_closest(0u, glm::vec3{}, static_cast<float>(_resolution), ray, hit);
-        //                        }
-        //                        return hit;
     }
 
     [[nodiscard]] auto trace_any(Ray ray) const noexcept {
@@ -575,18 +564,13 @@ public:
 }
 
 std::unique_ptr<Volume> Volume::from(const Mesh &mesh, size_t resolution, glm::mat4 camera_to_world) noexcept {
-
     check_resolution(resolution);
-
     auto t0 = std::chrono::high_resolution_clock::now();
     auto segments = compute_segments(mesh, camera_to_world, resolution);
     auto t1 = std::chrono::high_resolution_clock::now();
     using namespace std::chrono_literals;
     std::cout << "Found " << segments.size() << " segments in " << (t1 - t0) / 1ns * 1e-6 << " ms" << std::endl;
-
-    auto volume = std::unique_ptr<Volume>{new Volume{Octree::build(segments, resolution), resolution}};
-//    volume->_mesh = volume->_octree->to_mesh();
-    return volume;
+    return std::unique_ptr<Volume>{new Volume{Octree::build(segments, resolution), resolution}};
 }
 
 Volume::Volume(std::unique_ptr<Octree> octree, size_t resolution) noexcept

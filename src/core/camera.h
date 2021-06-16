@@ -27,4 +27,6 @@ public:
     void rotate_y(float angle) noexcept;
     void rotate_z(float angle) noexcept;
     [[nodiscard]] auto rotation_to_world() const noexcept { return _rotation_to_world; }
+    [[nodiscard]] auto pixel_scale() const noexcept { return _pixel_scale; }
+    [[nodiscard]] auto z_plane() const noexcept { return _z_plane; }
 };

@@ -1,3 +1,5 @@
-add_library(sv-gpu STATIC common.h cuda_octree.cu cuda_octree.h)
+add_library(sv-gpu STATIC common.h cuda_octree.cu cuda_octree.h cuda_camera.cu cuda_camera.h)
 target_link_libraries(sv-gpu PUBLIC sv-ext CUDA::cudart)
 target_compile_definitions(sv-gpu PUBLIC SV_CUDA_AVAILABLE=1)
+target_compile_options(sv-gpu PRIVATE --expt-relaxed-constexpr --use_fast_math -O3)
+# set_target_properties(sv-gpu PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
