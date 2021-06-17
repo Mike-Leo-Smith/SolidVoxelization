@@ -198,7 +198,6 @@ private:
         };
 
         auto node = _nodes[node_index];
-        if (node.empty()) { return; }
         if (node.full()) { return add_cube(origin, res); }
 
         // leaf
@@ -448,11 +447,11 @@ public:
     }
 
     [[nodiscard]] auto dump(const std::filesystem::path &path) const noexcept {
-        auto path_str = std::filesystem::canonical(path).string();
-        if (!path.has_extension() || path.extension() != ".obj") { path_str.append(".obj"); }
-        std::vector<glm::vec3> vertices;
-        std::vector<glm::uvec3> indices;
         if (auto root = _nodes.front(); !root.empty()) {
+            auto path_str = std::filesystem::absolute(path).string();
+            if (!path.has_extension() || path.extension() != ".obj") { path_str.append(".obj"); }
+            std::vector<glm::vec3> vertices;
+            std::vector<glm::uvec3> indices;
             _to_mesh(0u, vertices, indices, glm::uvec3{}, _resolution);
             std::ofstream file{path_str};
             std::cout << "Dumped volume into a cube mesh with "
