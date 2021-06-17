@@ -198,6 +198,7 @@ private:
         };
 
         auto node = _nodes[node_index];
+        if (node.empty()) { return; }
         if (node.full()) { return add_cube(origin, res); }
 
         // leaf
@@ -446,6 +447,25 @@ public:
         return tree;
     }
 
+    [[nodiscard]] auto dump(const std::filesystem::path &path) const noexcept {
+        auto path_str = std::filesystem::canonical(path).string();
+        if (!path.has_extension() || path.extension() != ".obj") { path_str.append(".obj"); }
+        std::vector<glm::vec3> vertices;
+        std::vector<glm::uvec3> indices;
+        if (auto root = _nodes.front(); !root.empty()) {
+            _to_mesh(0u, vertices, indices, glm::uvec3{}, _resolution);
+            std::ofstream file{path_str};
+            std::cout << "Dumped volume into a cube mesh with "
+                      << vertices.size() << " vertices and "
+                      << indices.size() << " faces" << std::endl;
+            for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
+            for (auto i : indices) {
+                auto f = i + 1u;
+                file << "f " << f.x << " " << f.y << " " << f.z << "\n";
+            }
+        }
+    }
+
     [[nodiscard]] auto to_mesh() const noexcept {
         std::vector<glm::vec3> vertices;
         std::vector<glm::uvec3> indices;
@@ -578,6 +598,7 @@ Volume::Volume(std::unique_ptr<Octree> octree, size_t resolution) noexcept
 
 bool Volume::trace_any(Ray ray) const noexcept { return _octree->trace_any(ray); }
 Hit Volume::trace_closest(Ray ray) const noexcept { return _octree->trace_closest(ray); }
+void Volume::dump(const std::filesystem::path &path) const noexcept { _octree->dump(path); }
 
 Volume::~Volume() noexcept = default;
 

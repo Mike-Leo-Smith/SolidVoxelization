@@ -32,9 +32,7 @@ public:
     [[nodiscard]] auto resolution() const noexcept { return _resolution; }
     [[nodiscard]] bool trace_any(Ray ray) const noexcept;
     [[nodiscard]] Hit trace_closest(Ray ray) const noexcept;
-    
-    // TODO: temp hack...
-    [[nodiscard]] auto mesh() const noexcept { return _mesh.get(); }
+    void dump(const std::filesystem::path &path) const noexcept;
 
 #ifdef SV_CUDA_AVAILABLE
     [[nodiscard]] std::unique_ptr<CUDAOctree> cuda() const noexcept;

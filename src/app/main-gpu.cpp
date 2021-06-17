@@ -203,6 +203,8 @@ int main(int argc, char *argv[]) {
                 camera = initial_camera;
                 framerate.clear();
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Dump Volume")) { volume->dump("volume.obj"); }
         });
 
         with_imgui_window("Mesh", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize, [&] {
