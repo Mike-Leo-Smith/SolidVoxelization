@@ -457,7 +457,11 @@ public:
             std::cout << "Dumped volume into a cube mesh with "
                       << vertices.size() << " vertices and "
                       << indices.size() << " faces" << std::endl;
-            for (auto v : vertices) { file << "v " << v.x << " " << v.y << " " << v.z << "\n"; }
+            auto scale = 2.0f / static_cast<float>(_resolution);
+            for (auto v : vertices) {
+                auto p = (v + 0.5f) * scale - 1.0f;
+                file << "v " << p.x << " " << p.y << " " << p.z << "\n";
+            }
             for (auto i : indices) {
                 auto f = i + 1u;
                 file << "f " << f.x << " " << f.y << " " << f.z << "\n";
