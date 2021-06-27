@@ -21,6 +21,9 @@ void with_imgui_window(const char *name, bool *is_open, ImGuiWindowFlags flags, 
 }
 
 int main(int argc, char *argv[]) {
+    
+    glm::mat2 m;
+    glm::inverse(m);
 
     auto model_path = argc > 1u
                           ? std::filesystem::canonical(argv[1])
