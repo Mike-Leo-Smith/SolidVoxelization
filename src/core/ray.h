@@ -41,13 +41,9 @@ struct alignas(16) Ray {
     float t_max;
 };
 
-static_assert(sizeof(Ray) == 32);
-
 struct alignas(16) Hit {
     glm::vec3 p;
     float t;
     glm::vec3 ng;
     int valid;
 };
-
-static_assert(sizeof(Hit) == 32);
